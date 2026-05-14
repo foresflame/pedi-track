@@ -450,6 +450,8 @@ header {
     border-radius: var(--border-radius);
     width: 100%;
     max-width: 500px;
+    max-height: 90vh;
+    overflow-y: auto;
     transform: translateY(20px);
     transition: transform 0.3s;
     box-shadow: 0 20px 40px rgba(0,0,0,0.2);
@@ -561,5 +563,92 @@ header {
     color: white;
     border-color: var(--primary);
     box-shadow: 0 4px 10px rgba(74, 144, 226, 0.3);
+}
+
+/* Expediente Grid */
+.expediente-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: 1.5rem;
+    background: var(--white);
+    padding: 2rem;
+    border-radius: 15px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.02);
+    border: 1px solid var(--primary-light);
+}
+
+.expediente-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.expediente-label {
+    font-size: 0.85rem;
+    color: var(--text-light);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+}
+
+.expediente-value {
+    font-size: 1.05rem;
+    color: var(--text-dark);
+    font-weight: 500;
+    line-height: 1.4;
+}
+
+/* Expediente Accordion */
+.expediente-accordion {
+    margin-bottom: 1rem;
+    background: var(--white);
+    border-radius: 12px;
+    border: 1px solid #E2E8F0;
+    overflow: hidden;
+}
+
+.expediente-summary {
+    padding: 1.2rem 1.5rem;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--primary);
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    list-style: none; /* remove default triangle */
+    transition: var(--transition);
+}
+
+.expediente-summary::-webkit-details-marker {
+    display: none; /* for safari */
+}
+
+.expediente-summary:hover {
+    background-color: var(--primary-light);
+}
+
+.expediente-accordion[open] .accordion-icon {
+    transform: rotate(180deg);
+}
+
+.expediente-accordion[open] .folder-icon::before {
+    content: "\f07c"; /* fa-folder-open */
+}
+
+.expediente-accordion-content {
+    padding: 1.5rem;
+    border-top: 1px solid #E2E8F0;
+    background: #FAFCFF; /* slightly lighter bg */
+}
+
+/* Adjust the grid inside the accordion */
+.expediente-accordion-content .expediente-grid {
+    padding: 0;
+    box-shadow: none;
+    border: none;
+    background: transparent;
 }
 

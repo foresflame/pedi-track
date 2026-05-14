@@ -1,12 +1,7 @@
 // Data Storage (Local)
 let patients = JSON.parse(localStorage.getItem('peditrack_patients')) || [];
 
-const babyHistory = [
-    { date: '10 Mayo 2026', weight: 8.5, height: 71, notes: 'Desarrollo psicomotor excelente. Inició alimentación complementaria sin reacciones adversas. Continuar con lactancia.' },
-    { date: '10 Abril 2026', weight: 7.8, height: 68, notes: 'Vacunas aplicadas. Todo en orden.' },
-    { date: '10 Marzo 2026', weight: 6.9, height: 65, notes: 'Chequeo mensual normal.' },
-    { date: '10 Febrero 2026', weight: 5.8, height: 61, notes: 'Buen agarre, subiendo de peso adecuadamente.' }
-];
+
 
 // App State
 let currentView = 'role-selector'; // 'role-selector', 'doctor-dashboard', 'parent-profile', 'patient-onboarding'
@@ -77,13 +72,54 @@ function renderRoleSelector() {
     `;
 }
 
+function calculateAgeString(birthDateStr, fallbackAge) {
+    if (!birthDateStr) return fallbackAge || '0 meses';
+    
+    const birthDate = new Date(birthDateStr);
+    const today = new Date();
+    
+    if (isNaN(birthDate.getTime())) return fallbackAge || '0 meses';
+
+    // Para evitar zonas horarias restando un día, añadimos la hora a mediodía local
+    const bYear = parseInt(birthDateStr.split('-')[0]);
+    const bMonth = parseInt(birthDateStr.split('-')[1]) - 1;
+    const bDay = parseInt(birthDateStr.split('-')[2]);
+    const localBirthDate = new Date(bYear, bMonth, bDay);
+
+    let months = (today.getFullYear() - localBirthDate.getFullYear()) * 12;
+    months -= localBirthDate.getMonth();
+    months += today.getMonth();
+    
+    if (today.getDate() < localBirthDate.getDate()) {
+        months--;
+    }
+
+    if (months < 0) months = 0;
+
+    if (months === 0) {
+        const diffTime = Math.abs(today - localBirthDate);
+        const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+        return diffDays === 1 ? '1 día' : `${diffDays} días`;
+    } else if (months < 12) {
+        return months === 1 ? '1 mes' : `${months} meses`;
+    } else {
+        const years = Math.floor(months / 12);
+        const remainingMonths = months % 12;
+        let result = years === 1 ? '1 año' : `${years} años`;
+        if (remainingMonths > 0) {
+            result += ` ${remainingMonths === 1 ? '1 mes' : remainingMonths + ' meses'}`;
+        }
+        return result;
+    }
+}
+
 function renderDoctorDashboard() {
     let patientsHtml = patients.map(p => `
         <div class="patient-card" onclick="viewPatient(${p.id})">
             <div class="avatar">${p.name ? p.name.charAt(0).toUpperCase() : '?'}</div>
             <div class="patient-info">
                 <h3>${p.name}</h3>
-                <p><i class="fa-regular fa-clock"></i> ${p.age}</p>
+                <p><i class="fa-regular fa-clock"></i> ${calculateAgeString(p.onboardingData ? p.onboardingData['Fecha de nacimiento'] : null, p.age)}</p>
                 <div style="margin-top: 0.5rem; display: flex; gap: 1rem; font-size: 0.8rem; font-weight: 500;">
                     <span><i class="fa-solid fa-weight-scale" style="color: var(--secondary)"></i> ${p.weight} kg</span>
                     <span><i class="fa-solid fa-ruler-vertical" style="color: var(--secondary)"></i> ${p.height} cm</span>
@@ -132,19 +168,46 @@ function renderParentProfile() {
                 </div>`;
     }
 
-    let historyHtml = babyHistory.map(h => `
+    const consults = p.consultations || [];
+    let historyHtml = consults.length > 0 ? consults.map((h, idx) => {
+        let medsToRender = [];
+        if (h.medication) medsToRender.push(h.medication);
+        if (h.medications && h.medications.length > 0) medsToRender = medsToRender.concat(h.medications);
+        
+        return `
         <div class="timeline-item">
             <div class="timeline-date">${h.date}</div>
             <div class="timeline-content">
-                <h4>Consulta de Seguimiento</h4>
-                <p>${h.notes}</p>
+                <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                    <h4>${h.type || 'Consulta de Seguimiento'}</h4>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <button class="btn" style="padding: 0.2rem 0.5rem; font-size: 0.8rem; background: transparent; color: var(--primary); box-shadow: none;" onclick="editConsult(${idx})" title="Editar"><i class="fa-solid fa-pen"></i></button>
+                        <button class="btn" style="padding: 0.2rem 0.5rem; font-size: 0.8rem; background: transparent; color: #ef4444; box-shadow: none;" onclick="deleteConsult(${idx})" title="Eliminar"><i class="fa-solid fa-trash"></i></button>
+                    </div>
+                </div>
+                ${h.notes ? `<p>${h.notes}</p>` : ''}
+                
+                ${medsToRender.length > 0 ? `
+                <div style="background: var(--primary-light); padding: 0.8rem; border-radius: 6px; margin: 0.8rem 0; font-size: 0.9rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                        <strong><i class="fa-solid fa-pills" style="color: var(--primary);"></i> Receta:</strong>
+                        <button class="btn" style="padding: 0.2rem 0.5rem; font-size: 0.8rem; background: var(--primary); color: white; border-radius: 4px; box-shadow: none;" onclick="printPrescription(${idx})" title="Imprimir Receta"><i class="fa-solid fa-print"></i> Imprimir</button>
+                    </div>
+                    <ul style="margin: 0 0 0 1.5rem; padding: 0;">
+                        ${medsToRender.map(m => `<li style="margin-bottom: 0.2rem;">${m.name} - ${m.dose} (${m.freq})</li>`).join('')}
+                    </ul>
+                </div>
+                ` : ''}
+
                 <div class="timeline-metrics">
                     <div class="metric"><i class="fa-solid fa-weight-scale"></i> ${h.weight} kg</div>
                     <div class="metric"><i class="fa-solid fa-ruler-vertical"></i> ${h.height} cm</div>
+                    ${h.head ? `<div class="metric"><i class="fa-solid fa-head-side-measles" style="color: var(--secondary)"></i> ${h.head} cm</div>` : ''}
                 </div>
             </div>
         </div>
-    `).join('');
+        `;
+    }).join('') : '<p style="color: var(--text-light); padding: 1rem 0;">No hay consultas registradas aún.</p>';
 
     return `
         <div class="profile-view">
@@ -152,10 +215,10 @@ function renderParentProfile() {
                 <div class="profile-avatar">${p.name ? p.name.charAt(0).toUpperCase() : '?'}</div>
                 <div style="z-index: 2;">
                     <h1 style="font-size: 2.5rem; margin-bottom: 0.5rem;">${p.name}</h1>
-                    <p style="font-size: 1.2rem; opacity: 0.9;">${p.age} • Dr. Roberto Pediátrico</p>
+                    <p style="font-size: 1.2rem; opacity: 0.9;">${calculateAgeString(p.onboardingData ? p.onboardingData['Fecha de nacimiento'] : null, p.age)} • Dr. Roberto Pediátrico</p>
                 </div>
                 ${currentView === 'doctor-dashboard' || true ? `
-                <button class="btn btn-primary" style="margin-left: auto; background: var(--white); color: var(--primary); z-index: 2;" onclick="openModal('addConsultModal')">
+                <button class="btn btn-primary" style="margin-left: auto; background: var(--white); color: var(--primary); z-index: 2;" onclick="window.editingConsultIndex = null; openModal('addConsultModal')">
                     <i class="fa-solid fa-notes-medical"></i> Registrar Consulta
                 </button>` : ''}
             </div>
@@ -192,12 +255,32 @@ function renderParentProfile() {
                 </div>
             </div>
 
-            ${p.onboardingData ? `
+            ${p.onboardingData && Object.keys(p.onboardingData).length > 0 ? `
             <div class="history-section" style="margin-top: 2rem;">
-                <h2 style="margin-bottom: 1.5rem;">Expediente de Ingreso (Datos Completos)</h2>
-                <div style="background: var(--bg-color); padding: 1.5rem; border-radius: 12px; font-family: monospace; white-space: pre-wrap; font-size: 0.95rem; border: 1px solid var(--border-color); color: var(--text-dark); line-height: 1.6;">
-${Object.entries(p.onboardingData).map(([k, v]) => `<strong>${k}:</strong> ${v}`).join('\n')}
-                </div>
+                <h2 style="margin-bottom: 2rem; font-size: 1.8rem; border-bottom: 2px solid var(--primary-light); padding-bottom: 0.5rem;">Expediente de Ingreso</h2>
+                ${Object.entries(categorizeOnboardingData(p.onboardingData)).map(([catName, items]) => {
+                    if (items.length === 0) return '';
+                    return `
+                    <details class="expediente-accordion" ${catName === "Datos Generales y Nacimiento" ? "open" : ""}>
+                        <summary class="expediente-summary">
+                            <div style="display: flex; align-items: center; gap: 0.8rem;">
+                                <i class="fa-solid fa-folder folder-icon" style="color: var(--secondary);"></i> ${catName}
+                            </div>
+                            <i class="fa-solid fa-chevron-down accordion-icon" style="color: var(--text-light); transition: transform 0.3s ease;"></i>
+                        </summary>
+                        <div class="expediente-accordion-content">
+                            <div class="expediente-grid">
+                                ${items.map(item => `
+                                <div class="expediente-item">
+                                    <span class="expediente-label"><i class="fa-solid fa-check" style="color: var(--secondary); margin-right: 0.4rem; font-size: 0.8rem;"></i>${formatLabel(item.key)}</span>
+                                    <span class="expediente-value">${item.value}</span>
+                                </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    </details>
+                    `;
+                }).join('')}
             </div>
             ` : ''}
         </div>
@@ -236,21 +319,64 @@ function renderModals() {
                     <h2>Registrar Consulta</h2>
                     <button class="close-btn" onclick="closeModal('addConsultModal')"><i class="fa-solid fa-xmark"></i></button>
                 </div>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem;">
                     <div class="form-group">
                         <label>Peso (kg)</label>
-                        <input type="number" step="0.1" class="form-control" placeholder="Ej. 8.5">
+                        <input type="number" id="consultWeight" step="0.1" class="form-control" placeholder="Ej. 8.5">
                     </div>
                     <div class="form-group">
                         <label>Estatura (cm)</label>
-                        <input type="number" step="0.1" class="form-control" placeholder="Ej. 71">
+                        <input type="number" id="consultHeight" step="0.1" class="form-control" placeholder="Ej. 71">
+                    </div>
+                    <div class="form-group">
+                        <label>P. Cefálico</label>
+                        <input type="number" id="consultHead" step="0.1" class="form-control" placeholder="Ej. 45">
                     </div>
                 </div>
+                
+                <div class="form-group">
+                    <label>Tipo de consulta</label>
+                    <select id="consultType" class="form-control">
+                        <option value="Control de niño sano">Control de niño sano</option>
+                        <option value="Enfermedad">Enfermedad</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>¿Requiere medicación?</label>
+                    <select id="consultMedicationReq" class="form-control" onchange="document.getElementById('medicationDetails').style.display = this.value === 'Sí' ? 'block' : 'none'">
+                        <option value="No">No</option>
+                        <option value="Sí">Sí</option>
+                    </select>
+                </div>
+                
+                <div id="medicationDetails" style="display: none; background: var(--primary-light); padding: 1rem; border-radius: 8px; margin-bottom: 1.5rem;">
+                    <div id="medicationsList">
+                        <!-- Generado dinámicamente -->
+                    </div>
+                    <button class="btn" style="background: transparent; color: var(--primary); border: 1px dashed var(--primary); width: 100%; margin-top: 1rem; padding: 0.5rem;" onclick="addMedicationField()">
+                        <i class="fa-solid fa-plus"></i> Añadir otro medicamento
+                    </button>
+                </div>
+
                 <div class="form-group">
                     <label>Notas Clínicas</label>
-                    <textarea class="form-control" rows="4" placeholder="Observaciones, vacunas aplicadas, etc..."></textarea>
+                    <textarea id="consultNotes" class="form-control" rows="4" placeholder="Observaciones, vacunas aplicadas, etc..."></textarea>
                 </div>
-                <button class="btn btn-primary" style="width: 100%; margin-top: 1rem;" onclick="closeModal('addConsultModal'); alert('Consulta registrada con éxito')">Guardar Registro</button>
+                <button class="btn btn-primary" style="width: 100%; margin-top: 1rem;" onclick="saveConsult()">Guardar Registro</button>
+            </div>
+        </div>
+
+        <!-- Confirm Delete Modal -->
+        <div class="modal-overlay" id="deleteConfirmModal" onclick="if(event.target === this) closeModal('deleteConfirmModal')">
+            <div class="modal-content" style="max-width: 400px; text-align: center;">
+                <i class="fa-solid fa-circle-exclamation" style="font-size: 3rem; color: #ef4444; margin-bottom: 1rem;"></i>
+                <h2 style="margin-bottom: 1rem;">¿Eliminar Consulta?</h2>
+                <p style="color: var(--text-light); margin-bottom: 1.5rem;">Esta acción no se puede deshacer. Se perderán todos los datos de esta visita.</p>
+                <div style="display: flex; gap: 1rem;">
+                    <button class="btn" style="flex: 1; background: #f1f5f9; color: var(--text-dark);" onclick="closeModal('deleteConfirmModal')">Cancelar</button>
+                    <button class="btn" style="flex: 1; background: #ef4444; color: white;" onclick="confirmDeleteConsult()">Eliminar</button>
+                </div>
             </div>
         </div>
     `;
@@ -646,6 +772,110 @@ function renderOnboarding() {
     `;
 }
 
+function formatLabel(key) {
+    const knownKeys = {
+        'new-patient-name': 'Nombre del Bebé',
+        'Ej. María Gómez': 'Nombre de la Madre',
+        'Ej. Carlos Pérez': 'Nombre del Padre',
+        'Ej. 39': 'Semanas de Gestación',
+        'Campo': 'Datos Adicionales',
+        'tipoParto': 'Tipo de Parto',
+        'lloroNacer': 'Lloró al nacer',
+        'apgarScore': 'Apgar',
+        'Peso': 'Peso al nacer (kg)',
+        'Talla': 'Talla al nacer (cm)',
+        'PC': 'Perímetro Cefálico (cm)',
+        'fueACasa': 'Se fue a casa',
+        'ictericia': 'Presentó Ictericia',
+        'Detallar familiares y enfermedades...': 'Antecedentes Familiares',
+        'Estatura Mamá': 'Estatura Mamá (cm)',
+        'Estatura Papá': 'Estatura Papá (cm)',
+        'tamiz_metabolico': 'Tamiz Metabólico',
+        'tamiz_auditivo': 'Tamiz Auditivo',
+        'tamiz_cardiaco': 'Tamiz Cardiaco',
+        'tamiz_visual': 'Tamiz Visual',
+        'tamiz_ortopedico': 'Tamiz Ortopédico',
+        'Fecha de aplicación': 'Fecha de aplicación',
+        'Resultado': 'Resultado del Tamiz',
+        '¿Qué está comiendo actualmente el bebé?': 'Alimentación Actual',
+        'Ej. A libre demanda, cada 2 horas...': 'Frecuencia de alimentación',
+        'Ej. 15 minutos por pecho...': 'Duración promedio',
+        'dolorPecho': 'Dolor al amamantar',
+        'Ej. Problemas de agarre, uso de pezoneras...': 'Comentarios Lactancia',
+        'Sí / No, frecuencia...': 'Regurgita',
+        'Ej. 6': 'Pañales de pipí (24h)',
+        'Ej. 3 veces, amarillo mostaza, aguada...': 'Evacuaciones (popó)',
+        'Ej. Sí, por las tardes llora mucho...': 'Cólicos o llanto',
+        '¿En dónde está durmiendo el bebé?': 'Lugar para dormir',
+        '¿En qué posición lo acuestas para dormir?': 'Posición al dormir',
+        'objetosCuna': 'Objetos en la cuna',
+        'Ej. 2h de día, 4h de noche...': 'Horas de sueño',
+        'fumaCasa': 'Fuman en casa',
+        'fijaMirada': 'Fija la mirada',
+        'sustoRuidos': 'Se asusta con ruidos',
+        'calmaVoz': 'Se calma con voz',
+        'levantaCabeza': 'Levanta la cabeza',
+        'Ej. Llanto fuerte, se calma al mecerlo...': 'Llanto y métodos',
+        'Ej. Muy cansados pero felices...': 'Estado emocional padres',
+        'Ej. NAN 1, Similac...': 'Fórmula',
+        'Ej. 3': 'Onzas o frecuencia',
+        'Ninguna': 'Complicaciones embarazo',
+        'Ninguno': 'Medicamentos embarazo'
+    };
+
+    if (knownKeys[key]) return knownKeys[key];
+
+    let formatted = key.replace(/^Ej\.\s*/i, '').replace(/[:?¿]/g, '').trim();
+    formatted = formatted.replace(/([A-Z])/g, ' $1');
+    return formatted.charAt(0).toUpperCase() + formatted.slice(1);
+}
+
+function categorizeOnboardingData(data) {
+    const categories = {
+        "Datos Generales y Nacimiento": [],
+        "Antecedentes Familiares": [],
+        "Primeros Estudios y Vacunas": [],
+        "Alimentación": [],
+        "Digestión (Pañales)": [],
+        "Sueño y Seguridad": [],
+        "Desarrollo y Sentidos": [],
+        "Otros Registros": []
+    };
+
+    const stepMapping = {
+        'new-patient-name': 1, 'Ej. María Gómez': 1, 'Ej. Carlos Pérez': 1, 'Ej. 39': 1,
+        'tipoParto': 1, 'lloroNacer': 1, 'apgarScore': 1, 'Peso': 1, 'Talla': 1, 'PC': 1, 'fueACasa': 1, 'ictericia': 1,
+        'Ninguna': 1, 'Ninguno': 1, 'Fecha de nacimiento': 1, 'Campo': 1,
+        'Detallar familiares y enfermedades...': 2, 'Estatura Mamá': 2, 'Estatura Papá': 2,
+        'tamiz_metabolico': 3, 'tamiz_auditivo': 3, 'tamiz_cardiaco': 3, 'tamiz_visual': 3, 'tamiz_ortopedico': 3, 'Fecha de aplicación': 3, 'Resultado': 3,
+        '¿Qué está comiendo actualmente el bebé?': 4, 'Ej. A libre demanda, cada 2 horas...': 4, 'Ej. 15 minutos por pecho...': 4,
+        'dolorPecho': 4, 'Ej. Problemas de agarre, uso de pezoneras...': 4, 'Ej. NAN 1, Similac...': 4, 'Ej. 3': 4,
+        'Sí / No, frecuencia...': 5, 'Ej. 6': 5, 'Ej. 3 veces, amarillo mostaza, aguada...': 5, 'Ej. Sí, por las tardes llora mucho...': 5,
+        '¿En dónde está durmiendo el bebé?': 6, '¿En qué posición lo acuestas para dormir?': 6, 'objetosCuna': 6, 'Ej. 2h de día, 4h de noche...': 6, 'fumaCasa': 6,
+        'fijaMirada': 7, 'sustoRuidos': 7, 'calmaVoz': 7, 'levantaCabeza': 7, 'Ej. Llanto fuerte, se calma al mecerlo...': 7, 'Ej. Muy cansados pero felices...': 7
+    };
+
+    const stepTitles = [
+        "Otros Registros",
+        "Datos Generales y Nacimiento",
+        "Antecedentes Familiares",
+        "Primeros Estudios y Vacunas",
+        "Alimentación",
+        "Digestión (Pañales)",
+        "Sueño y Seguridad",
+        "Desarrollo y Sentidos"
+    ];
+
+    Object.entries(data).forEach(([k, v]) => {
+        if (!v || v.trim() === '') return;
+        const stepNum = stepMapping[k] || 0;
+        const catName = stepTitles[stepNum];
+        categories[catName].push({ key: k, value: v });
+    });
+
+    return categories;
+}
+
 // Navigation
 window.navigate = function(view) {
     currentView = view;
@@ -656,6 +886,77 @@ window.navigate = function(view) {
 window.viewPatient = function(id) {
     currentPatientId = id;
     navigate('parent-profile');
+}
+
+function validateCurrentStep() {
+    const container = document.querySelector('.onboarding-content');
+    if (!container) return true;
+
+    const elements = container.querySelectorAll('input, select, textarea');
+    let isValid = true;
+    let firstInvalid = null;
+    const radioGroups = {};
+    const checkboxGroups = {};
+
+    elements.forEach(el => {
+        // Ignorar si está oculto explícitamente
+        if (el.closest('[style*="display: none"]')) return;
+        
+        // Limpiar estilos previos
+        el.style.borderColor = '';
+        const label = el.closest('label');
+        if (label) label.style.color = '';
+
+        if (el.type === 'radio') {
+            if (!radioGroups[el.name]) radioGroups[el.name] = [];
+            radioGroups[el.name].push(el);
+        } else if (el.type === 'checkbox') {
+            // Validar grupos de checkboxes en cuadrículas (como Complicaciones o Medicamentos)
+            const parentGroup = el.closest('div[style*="grid-template-columns: 1fr 1fr"]');
+            if (parentGroup) {
+                const key = 'cbGroup_' + parentGroup.offsetTop;
+                if (!checkboxGroups[key]) checkboxGroups[key] = [];
+                checkboxGroups[key].push(el);
+            }
+        } else {
+            if (!el.value || el.value.trim() === "") {
+                isValid = false;
+                el.style.borderColor = '#ef4444'; // rojo
+                if (!firstInvalid) firstInvalid = el;
+            }
+        }
+    });
+
+    Object.values(radioGroups).forEach(group => {
+        if (!group.some(r => r.checked)) {
+            isValid = false;
+            group.forEach(r => {
+                const label = r.closest('label');
+                if (label) label.style.color = '#ef4444';
+            });
+            if (!firstInvalid) firstInvalid = group[0];
+        }
+    });
+
+    Object.values(checkboxGroups).forEach(group => {
+        if (!group.some(c => c.checked)) {
+            isValid = false;
+            group.forEach(c => {
+                const label = c.closest('label');
+                if (label) label.style.color = '#ef4444';
+            });
+            if (!firstInvalid) firstInvalid = group[0];
+        }
+    });
+
+    if (!isValid) {
+        alert("Por favor, responde todas las preguntas visibles antes de continuar.");
+        if (firstInvalid && typeof firstInvalid.focus === 'function') {
+            firstInvalid.focus();
+        }
+    }
+
+    return isValid;
 }
 
 function saveCurrentStepData() {
@@ -681,6 +982,8 @@ function saveCurrentStepData() {
 }
 
 window.nextOnboardingStep = function() {
+    if (!validateCurrentStep()) return;
+
     saveCurrentStepData();
 
     if (currentOnboardingStep === 1) {
@@ -706,6 +1009,8 @@ window.prevOnboardingStep = function() {
 }
 
 window.finishOnboarding = function() {
+    if (!validateCurrentStep()) return;
+
     saveCurrentStepData();
     
     const newName = window.newPatientName || "Bebé Nuevo";
@@ -717,7 +1022,8 @@ window.finishOnboarding = function() {
         weight: window.newPatientData['Peso'] || 3.2,
         height: window.newPatientData['Talla'] || 50,
         lastVisit: 'Hoy',
-        onboardingData: window.newPatientData
+        onboardingData: window.newPatientData,
+        consultations: []
     };
     
     patients.unshift(newPatient);
@@ -736,12 +1042,57 @@ window.finishOnboarding = function() {
 }
 
 // Modals
+window.editingConsultIndex = null;
+
 window.openModal = function(id) {
     document.getElementById(id).classList.add('active');
 }
 
+window.addMedicationField = function(med = null) {
+    const list = document.getElementById('medicationsList');
+    if (!list) return;
+    const index = list.children.length;
+    const div = document.createElement('div');
+    div.className = 'medication-item';
+    div.style.position = 'relative';
+    div.innerHTML = `
+        ${index > 0 ? '<hr style="border:0; border-top: 1px dashed #cbd5e1; margin: 1rem 0;">' : ''}
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+            <label style="font-size: 0.9rem; margin-bottom: 0;">Medicamento ${index + 1}</label>
+            ${index > 0 ? `<button class="btn" style="padding: 0; color: #ef4444; background: transparent; box-shadow: none;" onclick="this.closest('.medication-item').remove()" title="Eliminar"><i class="fa-solid fa-trash"></i></button>` : ''}
+        </div>
+        <div class="form-group" style="margin-bottom: 0.5rem;">
+            <input type="text" class="form-control med-name" placeholder="Nombre (Ej. Paracetamol)" value="${med && med.name ? med.name : ''}">
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 0.5rem;">
+            <div class="form-group" style="margin-bottom: 0;">
+                <input type="text" class="form-control med-dose" placeholder="Dosis (Ej. 5ml)" value="${med && med.dose ? med.dose : ''}">
+            </div>
+            <div class="form-group" style="margin-bottom: 0;">
+                <input type="text" class="form-control med-freq" placeholder="Frecuencia (Ej. 8h)" value="${med && med.freq ? med.freq : ''}">
+            </div>
+        </div>
+    `;
+    list.appendChild(div);
+}
+
 window.closeModal = function(id) {
     document.getElementById(id).classList.remove('active');
+    if (id === 'addConsultModal') {
+        window.editingConsultIndex = null;
+        ['consultWeight', 'consultHeight', 'consultHead', 'consultNotes'].forEach(inputId => {
+            if(document.getElementById(inputId)) document.getElementById(inputId).value = "";
+        });
+        if(document.getElementById('consultType')) document.getElementById('consultType').value = "Control de niño sano";
+        if(document.getElementById('consultMedicationReq')) {
+            document.getElementById('consultMedicationReq').value = "No";
+            document.getElementById('medicationDetails').style.display = 'none';
+        }
+        if(document.getElementById('medicationsList')) {
+            document.getElementById('medicationsList').innerHTML = '';
+            window.addMedicationField();
+        }
+    }
 }
 
 // Initialize Chart.js
@@ -749,10 +1100,34 @@ function initChart() {
     const ctx = document.getElementById('growthChart');
     if (!ctx) return;
 
-    // Reverse history so oldest is first
-    const dataHistory = [...babyHistory].reverse();
-    const labels = dataHistory.map(h => h.date.split(' ')[1]); // get month roughly
-    const weights = dataHistory.map(h => h.weight);
+    const p = patients.find(pat => pat.id === currentPatientId) || patients[0];
+    if (!p) return;
+
+    let labels = [];
+    let weights = [];
+
+    // Punto 1: Datos de nacimiento / registro
+    if (p.onboardingData) {
+        const birthDate = p.onboardingData['Fecha de nacimiento'] || 'Nacimiento';
+        const birthWeight = parseFloat(p.onboardingData['Peso']) || parseFloat(p.weight) || 0;
+        
+        if (birthWeight > 0) {
+            labels.push(birthDate);
+            weights.push(birthWeight);
+        }
+    } else if (p.weight) {
+        labels.push('Nacimiento');
+        weights.push(parseFloat(p.weight));
+    }
+
+    // Puntos a sumar: Consultas
+    if (p.consultations && p.consultations.length > 0) {
+        const dataHistory = [...p.consultations].reverse();
+        labels = labels.concat(dataHistory.map(h => h.date));
+        weights = weights.concat(dataHistory.map(h => parseFloat(h.weight)));
+    }
+
+    if (weights.length === 0) return;
 
     new Chart(ctx, {
         type: 'line',
@@ -789,6 +1164,137 @@ function initChart() {
             }
         }
     });
+}
+
+window.saveConsult = function() {
+    const p = patients.find(pat => pat.id === currentPatientId);
+    if (!p) return;
+    
+    const weight = document.getElementById('consultWeight').value;
+    const height = document.getElementById('consultHeight').value;
+    const head = document.getElementById('consultHead') ? document.getElementById('consultHead').value : '';
+    const type = document.getElementById('consultType') ? document.getElementById('consultType').value : 'Control de niño sano';
+    const reqMed = document.getElementById('consultMedicationReq') ? document.getElementById('consultMedicationReq').value : 'No';
+    const notes = document.getElementById('consultNotes').value;
+    
+    if (!weight || !height) {
+        alert("Por favor ingrese al menos el peso y la estatura.");
+        return;
+    }
+
+    if (!p.consultations) p.consultations = [];
+
+    const dateStr = new Date().toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' });
+
+    let medicationsArray = [];
+    if (reqMed === 'Sí') {
+        const medItems = document.querySelectorAll('.medication-item');
+        medItems.forEach(item => {
+            const name = item.querySelector('.med-name').value;
+            const dose = item.querySelector('.med-dose').value;
+            const freq = item.querySelector('.med-freq').value;
+            if (name) {
+                medicationsArray.push({ name, dose, freq });
+            }
+        });
+    }
+
+    const newConsultData = {
+        date: window.editingConsultIndex !== null ? p.consultations[window.editingConsultIndex].date : dateStr,
+        weight: parseFloat(weight),
+        height: parseFloat(height),
+        head: head ? parseFloat(head) : null,
+        type: type,
+        medications: medicationsArray.length > 0 ? medicationsArray : null,
+        notes: notes || ""
+    };
+
+    if (window.editingConsultIndex !== null) {
+        p.consultations[window.editingConsultIndex] = newConsultData;
+        window.editingConsultIndex = null;
+    } else {
+        p.consultations.unshift(newConsultData);
+    }
+
+    // Actualizar datos del paciente basados en la última consulta
+    if (p.consultations.length > 0) {
+        p.weight = p.consultations[0].weight;
+        p.height = p.consultations[0].height;
+        p.lastVisit = p.consultations[0].date;
+    }
+
+    localStorage.setItem('peditrack_patients', JSON.stringify(patients));
+    
+    closeModal('addConsultModal');
+    renderApp();
+}
+
+window.editConsult = function(index) {
+    const p = patients.find(pat => pat.id === currentPatientId);
+    if (!p || !p.consultations || !p.consultations[index]) return;
+
+    const h = p.consultations[index];
+    window.editingConsultIndex = index;
+
+    document.getElementById('consultWeight').value = h.weight || "";
+    document.getElementById('consultHeight').value = h.height || "";
+    
+    if(document.getElementById('consultHead')) document.getElementById('consultHead').value = h.head || "";
+    if(document.getElementById('consultType')) document.getElementById('consultType').value = h.type || "Control de niño sano";
+    
+    let medsToEdit = [];
+    if (h.medication) medsToEdit.push(h.medication);
+    if (h.medications && h.medications.length > 0) medsToEdit = medsToEdit.concat(h.medications);
+
+    if (document.getElementById('consultMedicationReq')) {
+        document.getElementById('consultMedicationReq').value = medsToEdit.length > 0 ? "Sí" : "No";
+        document.getElementById('medicationDetails').style.display = medsToEdit.length > 0 ? "block" : "none";
+    }
+
+    if (document.getElementById('medicationsList')) {
+        document.getElementById('medicationsList').innerHTML = '';
+        if (medsToEdit.length > 0) {
+            medsToEdit.forEach(m => window.addMedicationField(m));
+        } else {
+            window.addMedicationField();
+        }
+    }
+
+    document.getElementById('consultNotes').value = h.notes || "";
+
+    openModal('addConsultModal');
+}
+
+window.indexToDelete = null;
+
+window.deleteConsult = function(index) {
+    window.indexToDelete = index;
+    openModal('deleteConfirmModal');
+}
+
+window.confirmDeleteConsult = function() {
+    if (window.indexToDelete === null) return;
+    const index = window.indexToDelete;
+
+    const p = patients.find(pat => pat.id === currentPatientId);
+    if (!p || !p.consultations) return;
+
+    p.consultations.splice(index, 1);
+
+    if (p.consultations.length > 0) {
+        p.weight = p.consultations[0].weight;
+        p.height = p.consultations[0].height;
+        p.lastVisit = p.consultations[0].date;
+    } else {
+        p.weight = p.onboardingData && p.onboardingData['Peso'] ? parseFloat(p.onboardingData['Peso']) : 0;
+        p.height = p.onboardingData && p.onboardingData['Talla'] ? parseFloat(p.onboardingData['Talla']) : 0;
+        p.lastVisit = "Sin visitas";
+    }
+
+    localStorage.setItem('peditrack_patients', JSON.stringify(patients));
+    closeModal('deleteConfirmModal');
+    window.indexToDelete = null;
+    renderApp();
 }
 
 // Initial Render
@@ -859,4 +1365,103 @@ window.handleAlimentacionChange = function(value) {
         secMaterna.style.display = 'none';
         secFormula.style.display = 'none';
     }
+}
+
+window.printPrescription = function(index) {
+    const p = patients.find(pat => pat.id === currentPatientId);
+    if (!p || !p.consultations || !p.consultations[index]) return;
+    
+    const h = p.consultations[index];
+    
+    let medsToRender = [];
+    if (h.medication) medsToRender.push(h.medication);
+    if (h.medications && h.medications.length > 0) medsToRender = medsToRender.concat(h.medications);
+
+    if (medsToRender.length === 0) {
+        alert("No hay medicamentos para imprimir.");
+        return;
+    }
+
+    const ageStr = calculateAgeString(p.onboardingData ? p.onboardingData['Fecha de nacimiento'] : null, p.age);
+
+    const html = `
+    <!DOCTYPE html>
+    <html lang="es">
+    <head>
+        <meta charset="UTF-8">
+        <title>Receta Médica - ${p.name}</title>
+        <style>
+            body { font-family: 'Outfit', sans-serif, Arial; padding: 40px; color: #1e293b; line-height: 1.6; max-width: 800px; margin: 0 auto; }
+            .header { text-align: center; border-bottom: 2px solid #4A90E2; padding-bottom: 20px; margin-bottom: 30px; }
+            .header h1 { margin: 0; color: #4A90E2; font-size: 28px; letter-spacing: 1px; }
+            .header p { margin: 5px 0 0; color: #64748b; font-size: 14px; }
+            .patient-info { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 40px; font-size: 14px; }
+            .patient-info div { background: #f8fafc; padding: 12px 15px; border-radius: 6px; border: 1px solid #e2e8f0; }
+            .rx { font-size: 40px; color: #4A90E2; margin-bottom: 20px; font-weight: bold; font-family: serif; font-style: italic; }
+            .med-list { list-style: none; padding: 0; margin-left: 20px; }
+            .med-list li { margin-bottom: 25px; border-bottom: 1px dashed #cbd5e1; padding-bottom: 15px; }
+            .med-name { font-weight: bold; font-size: 18px; margin-bottom: 8px; color: #0f172a; }
+            .med-details { font-size: 15px; color: #475569; }
+            .footer { margin-top: 80px; text-align: center; font-size: 14px; }
+            .signature { margin-top: 60px; border-top: 1px solid #94a3b8; width: 250px; margin-left: auto; margin-right: auto; padding-top: 10px; color: #475569; }
+            @media print {
+                body { padding: 0; }
+                .patient-info div { border: 1px solid #000; background: transparent; }
+                .header { border-bottom: 2px solid #000; }
+                .rx { color: #000; }
+            }
+        </style>
+    </head>
+    <body>
+        <div class="header">
+            <h1>Dr. Roberto Pediátrico</h1>
+            <p>Especialista en Pediatría Integral</p>
+            <p>Cédula Prof. 1234567 | Tel. 555-0123</p>
+        </div>
+        
+        <div class="patient-info">
+            <div><strong>Paciente:</strong> ${p.name}</div>
+            <div><strong>Fecha:</strong> ${h.date}</div>
+            <div><strong>Edad:</strong> ${ageStr}</div>
+            <div><strong>Peso:</strong> ${h.weight} kg | <strong>Estatura:</strong> ${h.height} cm</div>
+        </div>
+
+        <div class="rx">Rx</div>
+
+        <ul class="med-list">
+            ${medsToRender.map(m => `
+            <li>
+                <div class="med-name">${m.name}</div>
+                <div class="med-details"><strong>Dosis:</strong> ${m.dose} &nbsp;|&nbsp; <strong>Frecuencia:</strong> ${m.freq}</div>
+            </li>
+            `).join('')}
+        </ul>
+
+        <div class="footer">
+            <div class="signature">Firma del Médico</div>
+            <p style="margin-top: 20px; font-size: 12px; color: #94a3b8;">Favor de surtir la receta tal como se indica.</p>
+        </div>
+        
+        <script>
+            window.onload = function() { 
+                setTimeout(function() {
+                    window.print();
+                }, 500);
+            }
+        </script>
+    </body>
+    </html>
+    `;
+
+    const iframe = document.createElement('iframe');
+    iframe.style.display = 'none';
+    document.body.appendChild(iframe);
+
+    iframe.contentDocument.open();
+    iframe.contentDocument.write(html);
+    iframe.contentDocument.close();
+
+    setTimeout(() => {
+        document.body.removeChild(iframe);
+    }, 10000);
 }
