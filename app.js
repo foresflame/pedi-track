@@ -4,25 +4,58 @@ let patients = JSON.parse(localStorage.getItem('peditrack_patients')) || [];
 
 
 // App State
-let currentView = 'role-selector'; // 'role-selector', 'doctor-dashboard', 'parent-profile', 'patient-onboarding'
+let currentUser = JSON.parse(localStorage.getItem('peditrack_user')) || null;
+let users = JSON.parse(localStorage.getItem('peditrack_users')) || [
+    { id: 1, email: 'admin@peditrack.com', password: '123', role: 'admin', name: 'Administrador Principal' },
+    { id: 2, email: 'doc@peditrack.com', password: '123', role: 'pediatra', name: 'Dr. Roberto Pediátrico' },
+    { id: 3, email: 'tutor@peditrack.com', password: '123', role: 'tutor', name: 'Padre/Madre de Prueba' }
+];
+
+// Migración para asignar un pediatra por defecto a pacientes existentes
+let patientsModified = false;
+patients.forEach(p => {
+    if (!p.doctorId) {
+        p.doctorId = 2; // ID de Dr. Roberto Pediátrico por defecto
+        patientsModified = true;
+    }
+});
+if (patientsModified) {
+    localStorage.setItem('peditrack_patients', JSON.stringify(patients));
+}
+
+function getRoleDefaultView(role) {
+    if (role === 'admin') return 'admin-dashboard';
+    if (role === 'pediatra') return 'doctor-dashboard';
+    if (role === 'tutor') return 'parent-profile';
+    return 'login';
+}
+
+let currentView = currentUser ? getRoleDefaultView(currentUser.role) : 'login';
 let currentOnboardingStep = 1;
 
 // Main Render Function
 function renderApp() {
     const app = document.getElementById('app');
     
+    let headerAction = '';
+    if (currentUser) {
+        headerAction = `<button class="btn btn-secondary" onclick="handleLogout()" style="display: flex; align-items: center; gap: 0.5rem;"><i class="fa-solid fa-arrow-right-from-bracket"></i> Salir</button>`;
+    }
+
     let html = `
         <header>
-            <div class="logo cursor-pointer" onclick="navigate('role-selector')">
+            <div class="logo cursor-pointer" onclick="${currentUser ? "navigate(getRoleDefaultView(currentUser.role))" : "navigate('login')"}">
                 <i class="fa-solid fa-baby-carriage"></i> PediTrack
             </div>
-            ${currentView !== 'role-selector' ? `<button class="btn btn-secondary" onclick="navigate('role-selector')">Cambiar Vista</button>` : ''}
+            ${headerAction}
         </header>
         <main class="container animate-fade-in" id="main-content">
     `;
 
-    if (currentView === 'role-selector') {
-        html += renderRoleSelector();
+    if (currentView === 'login') {
+        html += renderLogin();
+    } else if (currentView === 'admin-dashboard') {
+        html += renderAdminDashboard();
     } else if (currentView === 'doctor-dashboard') {
         html += renderDoctorDashboard();
     } else if (currentView === 'parent-profile') {
@@ -45,27 +78,134 @@ function renderApp() {
 }
 
 // Views
-function renderRoleSelector() {
+function renderLogin() {
     return `
-        <div class="role-selector">
-            <h1 style="font-size: 2.5rem; margin-bottom: 1rem;">Bienvenido a PediTrack</h1>
-            <p style="color: var(--text-light); font-size: 1.2rem; max-width: 600px;">La plataforma integral para el seguimiento y control del desarrollo de los más pequeños. Selecciona tu perfil para comenzar.</p>
+        <div class="login-view" style="max-width: 400px; margin: 4rem auto; background: white; padding: 2.5rem; border-radius: 15px; box-shadow: var(--shadow-md);">
+            <div style="text-align: center; margin-bottom: 2rem;">
+                <i class="fa-solid fa-baby-carriage" style="font-size: 3.5rem; color: var(--primary);"></i>
+                <h1 style="margin-top: 1rem; font-size: 2rem; color: var(--text-dark);">PediTrack</h1>
+                <p style="color: var(--text-light); margin-top: 0.5rem;">Iniciar sesión en tu cuenta</p>
+            </div>
             
-            <div class="role-cards">
-                <div class="role-card" onclick="navigate('doctor-dashboard')">
-                    <div class="role-icon">
-                        <i class="fa-solid fa-stethoscope"></i>
-                    </div>
-                    <h2>Soy Pediatra</h2>
-                    <p style="margin-top: 1rem; color: var(--text-light);">Gestiona a tus pacientes, registra consultas y visualiza curvas de crecimiento.</p>
+            <div class="form-group">
+                <label>Correo Electrónico</label>
+                <input type="email" id="loginEmail" class="form-control" placeholder="ej. doc@peditrack.com" value="doc@peditrack.com">
+            </div>
+            <div class="form-group">
+                <label>Contraseña</label>
+                <input type="password" id="loginPass" class="form-control" placeholder="••••••••" value="123">
+            </div>
+            
+            <button class="btn btn-primary" style="width: 100%; margin-top: 1rem; padding: 0.8rem; font-size: 1.1rem;" onclick="handleLogin()">Entrar</button>
+            
+            <div style="margin-top: 2rem; font-size: 0.85rem; color: var(--text-light); text-align: left; background: var(--primary-light); padding: 1rem; border-radius: 8px;">
+                <strong style="color: var(--primary); display: block; margin-bottom: 0.5rem;">Usuarios de prueba (Clave: 123):</strong>
+                <ul style="margin: 0; padding-left: 1.2rem; line-height: 1.6;">
+                    <li><strong>admin</strong>@peditrack.com</li>
+                    <li><strong>doc</strong>@peditrack.com</li>
+                    <li><strong>tutor</strong>@peditrack.com</li>
+                </ul>
+            </div>
+        </div>
+    `;
+}
+
+function renderAdminDashboard() {
+    const pediatricians = users.filter(u => u.role === 'pediatra');
+    const tutors = users.filter(u => u.role === 'tutor');
+
+    return `
+        <div class="dashboard">
+            <div class="dashboard-header">
+                <div>
+                    <h1 style="font-size: 2rem;">Panel de Administrador</h1>
+                    <p style="color: var(--text-light);">Bienvenido, ${currentUser ? currentUser.name : 'Admin'}</p>
                 </div>
-                
-                <div class="role-card" onclick="navigate('parent-profile')">
-                    <div class="role-icon">
-                        <i class="fa-solid fa-children"></i>
-                    </div>
-                    <h2>Soy Padre / Madre</h2>
-                    <p style="margin-top: 1rem; color: var(--text-light);">Revisa el perfil de tu bebé, su historial de consultas y sigue su crecimiento.</p>
+            </div>
+            
+            <div class="profile-stats">
+                <div class="stat-card">
+                    <div class="stat-label">Total Pacientes</div>
+                    <div class="stat-value">${patients.length}</div>
+                    <p style="color: var(--secondary); font-size: 0.9rem;"><i class="fa-solid fa-arrow-trend-up"></i> Sistema activo</p>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Total Pediatras</div>
+                    <div class="stat-value">${pediatricians.length}</div>
+                    <p style="color: var(--secondary); font-size: 0.9rem;">En la plataforma</p>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Total Tutores</div>
+                    <div class="stat-value">${tutors.length}</div>
+                    <p style="color: var(--secondary); font-size: 0.9rem;">Registrados</p>
+                </div>
+            </div>
+            
+            <div class="history-section" style="margin-top: 2rem;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <h2>Gestión de Pediatras</h2>
+                    <button class="btn btn-primary" onclick="window.editingUserId = null; openModal('userModal')">
+                        <i class="fa-solid fa-user-plus"></i> Añadir Pediatra
+                    </button>
+                </div>
+                <div style="background: white; padding: 1.5rem; border-radius: 15px; margin-top: 1rem; box-shadow: var(--shadow-sm); overflow-x: auto;">
+                    <table style="width: 100%; text-align: left; border-collapse: collapse;">
+                        <thead>
+                            <tr style="border-bottom: 2px solid var(--background); color: var(--text-light);">
+                                <th style="padding: 1rem 0;">Nombre</th>
+                                <th style="padding: 1rem 0;">Email</th>
+                                <th style="padding: 1rem 0; text-align: right;">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${pediatricians.map(u => `
+                            <tr style="border-bottom: 1px solid var(--background);">
+                                <td style="padding: 1rem 0; font-weight: 500;">${u.name}</td>
+                                <td style="padding: 1rem 0; color: var(--text-light);">${u.email}</td>
+                                <td style="padding: 1rem 0; text-align: right;">
+                                    <button class="btn" style="padding: 0.3rem 0.6rem; font-size: 0.8rem; background: transparent; color: var(--primary); box-shadow: none;" onclick="editUser(${u.id})" title="Editar"><i class="fa-solid fa-pen"></i></button>
+                                    <button class="btn" style="padding: 0.3rem 0.6rem; font-size: 0.8rem; background: transparent; color: #ef4444; box-shadow: none;" onclick="deleteUser(${u.id})" title="Eliminar"><i class="fa-solid fa-trash"></i></button>
+                                </td>
+                            </tr>
+                            `).join('')}
+                            ${pediatricians.length === 0 ? '<tr><td colspan="3" style="padding: 1rem 0; text-align: center; color: var(--text-light);">No hay pediatras registrados.</td></tr>' : ''}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="history-section" style="margin-top: 2rem;">
+                <h2>Asignación de Pacientes</h2>
+                <p style="color: var(--text-light); font-size: 0.9rem; margin-bottom: 1rem;">Administra qué pediatra atiende a cada paciente.</p>
+                <div style="background: white; padding: 1.5rem; border-radius: 15px; box-shadow: var(--shadow-sm); overflow-x: auto;">
+                    <table style="width: 100%; text-align: left; border-collapse: collapse;">
+                        <thead>
+                            <tr style="border-bottom: 2px solid var(--background); color: var(--text-light);">
+                                <th style="padding: 1rem 0;">Paciente</th>
+                                <th style="padding: 1rem 0;">Edad</th>
+                                <th style="padding: 1rem 0;">Pediatra Asignado</th>
+                                <th style="padding: 1rem 0; text-align: right;">Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${patients.map(p => {
+                                const doc = users.find(u => u.id === p.doctorId);
+                                const docName = doc ? doc.name : '<span style="color: #ef4444;">Sin asignar</span>';
+                                return `
+                            <tr style="border-bottom: 1px solid var(--background);">
+                                <td style="padding: 1rem 0; font-weight: 500;">${p.name}</td>
+                                <td style="padding: 1rem 0; color: var(--text-light);">${calculateAgeString(p.onboardingData ? p.onboardingData['Fecha de nacimiento'] : null, p.age)}</td>
+                                <td style="padding: 1rem 0;">${docName}</td>
+                                <td style="padding: 1rem 0; text-align: right;">
+                                    <button class="btn btn-secondary" style="padding: 0.3rem 0.8rem; font-size: 0.8rem;" onclick="openAssignPatientModal(${p.id})">
+                                        <i class="fa-solid fa-user-doctor"></i> Cambiar
+                                    </button>
+                                </td>
+                            </tr>
+                            `}).join('')}
+                            ${patients.length === 0 ? '<tr><td colspan="4" style="padding: 1rem 0; text-align: center; color: var(--text-light);">No hay pacientes registrados.</td></tr>' : ''}
+                        </tbody>
+                    </table>
                 </div>
             </div>
         </div>
@@ -114,7 +254,8 @@ function calculateAgeString(birthDateStr, fallbackAge) {
 }
 
 function renderDoctorDashboard() {
-    let patientsHtml = patients.map(p => `
+    const myPatients = currentUser.role === 'admin' ? patients : patients.filter(p => p.doctorId === currentUser.id);
+    let patientsHtml = myPatients.map(p => `
         <div class="patient-card" onclick="viewPatient(${p.id})">
             <div class="avatar">${p.name ? p.name.charAt(0).toUpperCase() : '?'}</div>
             <div class="patient-info">
@@ -129,7 +270,7 @@ function renderDoctorDashboard() {
         </div>
     `).join('');
 
-    if (patients.length === 0) {
+    if (myPatients.length === 0) {
         patientsHtml = `
             <div style="text-align: center; padding: 3rem; background: white; border-radius: 15px; grid-column: 1 / -1; margin-top: 2rem;">
                 <i class="fa-solid fa-folder-open" style="font-size: 3rem; color: var(--primary-light); margin-bottom: 1rem;"></i>
@@ -144,7 +285,7 @@ function renderDoctorDashboard() {
             <div class="dashboard-header">
                 <div>
                     <h1 style="font-size: 2rem;">Mis Pacientes</h1>
-                    <p style="color: var(--text-light);">${patients.length > 0 ? `Tienes ${patients.length} paciente(s) registrado(s).` : 'Bienvenido a tu panel de control.'}</p>
+                    <p style="color: var(--text-light);">${myPatients.length > 0 ? `Tienes ${myPatients.length} paciente(s) registrado(s).` : 'Bienvenido a tu panel de control.'}</p>
                 </div>
                 <button class="btn btn-primary" onclick="navigate('patient-onboarding')">
                     <i class="fa-solid fa-plus"></i> Nuevo Paciente
@@ -181,8 +322,10 @@ function renderParentProfile() {
                 <div style="display: flex; justify-content: space-between; align-items: flex-start;">
                     <h4>${h.type || 'Consulta de Seguimiento'}</h4>
                     <div style="display: flex; gap: 0.5rem;">
+                        ${(currentUser && currentUser.role !== 'tutor') ? `
                         <button class="btn" style="padding: 0.2rem 0.5rem; font-size: 0.8rem; background: transparent; color: var(--primary); box-shadow: none;" onclick="editConsult(${idx})" title="Editar"><i class="fa-solid fa-pen"></i></button>
                         <button class="btn" style="padding: 0.2rem 0.5rem; font-size: 0.8rem; background: transparent; color: #ef4444; box-shadow: none;" onclick="deleteConsult(${idx})" title="Eliminar"><i class="fa-solid fa-trash"></i></button>
+                        ` : ''}
                     </div>
                 </div>
                 ${h.notes ? `<p>${h.notes}</p>` : ''}
@@ -217,7 +360,7 @@ function renderParentProfile() {
                     <h1 style="font-size: 2.5rem; margin-bottom: 0.5rem;">${p.name}</h1>
                     <p style="font-size: 1.2rem; opacity: 0.9;">${calculateAgeString(p.onboardingData ? p.onboardingData['Fecha de nacimiento'] : null, p.age)} • Dr. Roberto Pediátrico</p>
                 </div>
-                ${currentView === 'doctor-dashboard' || true ? `
+                ${(currentUser && currentUser.role !== 'tutor') ? `
                 <button class="btn btn-primary" style="margin-left: auto; background: var(--white); color: var(--primary); z-index: 2;" onclick="window.editingConsultIndex = null; openModal('addConsultModal')">
                     <i class="fa-solid fa-notes-medical"></i> Registrar Consulta
                 </button>` : ''}
@@ -379,6 +522,61 @@ function renderModals() {
                 </div>
             </div>
         </div>
+
+        <!-- User Modal -->
+        <div class="modal-overlay" id="userModal" onclick="if(event.target === this) closeModal('userModal')">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2 id="userModalTitle">Añadir Pediatra</h2>
+                    <button class="close-btn" onclick="closeModal('userModal')"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+                <div class="form-group">
+                    <label>Nombre Completo</label>
+                    <input type="text" id="userModalName" class="form-control" placeholder="Ej. Dra. Ana Gómez">
+                </div>
+                <div class="form-group">
+                    <label>Correo Electrónico</label>
+                    <input type="email" id="userModalEmail" class="form-control" placeholder="ej. dra.ana@peditrack.com">
+                </div>
+                <div class="form-group">
+                    <label>Contraseña</label>
+                    <input type="text" id="userModalPassword" class="form-control" placeholder="Contraseña">
+                </div>
+                <button class="btn btn-primary" style="width: 100%; margin-top: 1rem;" onclick="saveUser()">Guardar Pediatra</button>
+            </div>
+        </div>
+
+        <!-- Confirm Delete User Modal -->
+        <div class="modal-overlay" id="deleteUserModal" onclick="if(event.target === this) closeModal('deleteUserModal')">
+            <div class="modal-content" style="max-width: 400px; text-align: center;">
+                <i class="fa-solid fa-user-xmark" style="font-size: 3rem; color: #ef4444; margin-bottom: 1rem;"></i>
+                <h2 style="margin-bottom: 1rem;">¿Eliminar Pediatra?</h2>
+                <p style="color: var(--text-light); margin-bottom: 1.5rem;">Esta acción no se puede deshacer. Los pacientes de este pediatra quedarán sin asignar.</p>
+                <div style="display: flex; gap: 1rem;">
+                    <button class="btn" style="flex: 1; background: #f1f5f9; color: var(--text-dark);" onclick="closeModal('deleteUserModal')">Cancelar</button>
+                    <button class="btn" style="flex: 1; background: #ef4444; color: white;" onclick="confirmDeleteUser()">Eliminar</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Assign Patient Modal -->
+        <div class="modal-overlay" id="assignPatientModal" onclick="if(event.target === this) closeModal('assignPatientModal')">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>Asignar Pediatra</h2>
+                    <button class="close-btn" onclick="closeModal('assignPatientModal')"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+                <p style="color: var(--text-light); margin-bottom: 1rem;">Selecciona el pediatra que atenderá a este paciente.</p>
+                <div class="form-group">
+                    <label>Pediatra</label>
+                    <select id="assignPatientSelect" class="form-control">
+                        <option value="">Sin asignar</option>
+                        ${users.filter(u => u.role === 'pediatra').map(u => `<option value="${u.id}">${u.name}</option>`).join('')}
+                    </select>
+                </div>
+                <button class="btn btn-primary" style="width: 100%; margin-top: 1rem;" onclick="savePatientAssignment()">Guardar Asignación</button>
+            </div>
+        </div>
     `;
 }
 
@@ -402,9 +600,19 @@ function renderOnboarding() {
                 <label>Nombre completo del bebé</label>
                 <input type="text" id="new-patient-name" class="form-control" placeholder="Ej. Juan Pérez">
             </div>
-            <div class="form-group">
-                <label>Fecha de nacimiento</label>
-                <input type="date" class="form-control">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.5rem;">
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label>Fecha de nacimiento</label>
+                    <input type="date" class="form-control">
+                </div>
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label>Sexo</label>
+                    <select name="Sexo" class="form-control">
+                        <option value="">Selecciona...</option>
+                        <option value="Masculino">Masculino</option>
+                        <option value="Femenino">Femenino</option>
+                    </select>
+                </div>
             </div>
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.5rem;">
                 <div class="form-group" style="margin-bottom: 0;">
@@ -877,8 +1085,37 @@ function categorizeOnboardingData(data) {
 }
 
 // Navigation
+window.handleLogin = function() {
+    const email = document.getElementById('loginEmail').value;
+    const pass = document.getElementById('loginPass').value;
+    const user = users.find(u => u.email === email && u.password === pass);
+
+    if (user) {
+        currentUser = user;
+        localStorage.setItem('peditrack_user', JSON.stringify(user));
+        navigate(getRoleDefaultView(user.role));
+    } else {
+        alert('Credenciales incorrectas. Verifica tu correo y contraseña.');
+    }
+}
+
+window.handleLogout = function() {
+    currentUser = null;
+    localStorage.removeItem('peditrack_user');
+    navigate('login');
+}
+
 window.navigate = function(view) {
-    currentView = view;
+    if (!currentUser && view !== 'login') {
+        currentView = 'login';
+    } else if (currentUser && view === 'login') {
+        currentView = getRoleDefaultView(currentUser.role);
+    } else if (currentUser && currentUser.role === 'tutor' && view !== 'parent-profile') {
+        alert("Acceso denegado: Solo puedes ver el perfil de tu bebé.");
+        currentView = 'parent-profile';
+    } else {
+        currentView = view;
+    }
     renderApp();
     window.scrollTo(0,0);
 }
@@ -1022,6 +1259,7 @@ window.finishOnboarding = function() {
         weight: window.newPatientData['Peso'] || 3.2,
         height: window.newPatientData['Talla'] || 50,
         lastVisit: 'Hoy',
+        doctorId: currentUser ? currentUser.id : null,
         onboardingData: window.newPatientData,
         consultations: []
     };
@@ -1092,6 +1330,12 @@ window.closeModal = function(id) {
             document.getElementById('medicationsList').innerHTML = '';
             window.addMedicationField();
         }
+    } else if (id === 'userModal') {
+        window.editingUserId = null;
+        document.getElementById('userModalTitle').innerText = "Añadir Pediatra";
+        document.getElementById('userModalName').value = "";
+        document.getElementById('userModalEmail').value = "";
+        document.getElementById('userModalPassword').value = "";
     }
 }
 
@@ -1464,4 +1708,97 @@ window.printPrescription = function(index) {
     setTimeout(() => {
         document.body.removeChild(iframe);
     }, 10000);
+}
+
+// --- User Management Logic ---
+window.editingUserId = null;
+
+window.saveUser = function() {
+    const name = document.getElementById('userModalName').value;
+    const email = document.getElementById('userModalEmail').value;
+    const password = document.getElementById('userModalPassword').value;
+
+    if (!name || !email || !password) {
+        alert("Por favor completa todos los campos.");
+        return;
+    }
+
+    if (window.editingUserId !== null) {
+        const userIndex = users.findIndex(u => u.id === window.editingUserId);
+        if (userIndex > -1) {
+            users[userIndex].name = name;
+            users[userIndex].email = email;
+            users[userIndex].password = password;
+        }
+    } else {
+        const newId = users.length > 0 ? Math.max(...users.map(u => u.id)) + 1 : 1;
+        users.push({ id: newId, email, password, role: 'pediatra', name });
+    }
+
+    localStorage.setItem('peditrack_users', JSON.stringify(users));
+    closeModal('userModal');
+    renderApp();
+}
+
+window.editUser = function(id) {
+    const user = users.find(u => u.id === id);
+    if (!user) return;
+    
+    window.editingUserId = id;
+    document.getElementById('userModalTitle').innerText = "Editar Pediatra";
+    document.getElementById('userModalName').value = user.name;
+    document.getElementById('userModalEmail').value = user.email;
+    document.getElementById('userModalPassword').value = user.password;
+    
+    openModal('userModal');
+}
+
+window.deleteUser = function(id) {
+    window.editingUserId = id;
+    openModal('deleteUserModal');
+}
+
+window.confirmDeleteUser = function() {
+    if (window.editingUserId === null) return;
+    
+    // Remove user
+    users = users.filter(u => u.id !== window.editingUserId);
+    localStorage.setItem('peditrack_users', JSON.stringify(users));
+    
+    // Unassign patients
+    patients.forEach(p => {
+        if (p.doctorId === window.editingUserId) {
+            p.doctorId = null;
+        }
+    });
+    localStorage.setItem('peditrack_patients', JSON.stringify(patients));
+    
+    closeModal('deleteUserModal');
+    renderApp();
+}
+
+// --- Patient Assignment Logic ---
+window.assigningPatientId = null;
+
+window.openAssignPatientModal = function(patientId) {
+    window.assigningPatientId = patientId;
+    const p = patients.find(pat => pat.id === patientId);
+    if (p) {
+        document.getElementById('assignPatientSelect').value = p.doctorId || "";
+    }
+    openModal('assignPatientModal');
+}
+
+window.savePatientAssignment = function() {
+    if (window.assigningPatientId === null) return;
+    const newDocId = document.getElementById('assignPatientSelect').value;
+    
+    const p = patients.find(pat => pat.id === window.assigningPatientId);
+    if (p) {
+        p.doctorId = newDocId ? parseInt(newDocId) : null;
+        localStorage.setItem('peditrack_patients', JSON.stringify(patients));
+    }
+    
+    closeModal('assignPatientModal');
+    renderApp();
 }
