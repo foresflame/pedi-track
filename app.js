@@ -62,6 +62,8 @@ function renderApp() {
         html += renderParentProfile();
     } else if (currentView === 'patient-onboarding') {
         html += renderOnboarding();
+    } else if (currentView === 'onboarding-success') {
+        html += renderOnboardingSuccess();
     }
 
     html += `</main>`;
@@ -426,6 +428,67 @@ function renderParentProfile() {
                 }).join('')}
             </div>
             ` : ''}
+        </div>
+    `;
+}
+
+function renderOnboardingSuccess() {
+    const data = window.successData || {};
+    const patientName = data.patientName || 'Paciente';
+    const momName = data.momName || 'No especificado';
+    const dadName = data.dadName || 'No especificado';
+    const email = data.tutorEmail || '';
+    const password = data.password || '';
+
+    const loginUrl = window.location.href.split('#')[0].split('?')[0]; 
+    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(loginUrl)}`;
+
+    return `
+        <div class="onboarding-success-view animate-fade-in" style="max-width: 900px; margin: 2rem auto; background: white; border-radius: 20px; overflow: hidden; box-shadow: var(--shadow-lg);">
+            <div style="background: var(--primary); padding: 3rem 2rem; text-align: center; color: white;">
+                <div style="width: 80px; height: 80px; background: rgba(255,255,255,0.2); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 1.5rem; font-size: 2.5rem;">
+                    <i class="fa-solid fa-check"></i>
+                </div>
+                <h1 style="font-size: 2.5rem; margin-bottom: 0.5rem; color: white;">¡Perfil Creado Exitosamente!</h1>
+                <p style="font-size: 1.2rem; opacity: 0.9;">El expediente de <strong>${patientName}</strong> ya está listo.</p>
+            </div>
+            
+            <div style="padding: 3rem; display: grid; grid-template-columns: 1fr 1fr; gap: 3rem; align-items: center;">
+                <div>
+                    <h2 style="color: var(--text-dark); margin-bottom: 1.5rem; font-size: 1.5rem; border-bottom: 2px solid var(--primary-light); padding-bottom: 0.5rem;">Credenciales de Acceso</h2>
+                    <p style="color: var(--text-light); margin-bottom: 1.5rem; line-height: 1.6;">Comparte estos datos con los tutores para que puedan acceder al expediente digital de su bebé desde su propio dispositivo.</p>
+                    
+                    <div style="background: var(--background); padding: 1.5rem; border-radius: 12px; margin-bottom: 2rem;">
+                        <div style="margin-bottom: 1rem;">
+                            <label style="font-size: 0.85rem; color: var(--text-light); text-transform: uppercase; letter-spacing: 1px; display: block; margin-bottom: 0.3rem;">Tutores:</label>
+                            <div style="font-weight: 500; font-size: 1.1rem; color: var(--text-dark);">${momName} ${dadName !== 'No especificado' ? '& ' + dadName : ''}</div>
+                        </div>
+                        ${email ? `
+                        <div style="margin-bottom: 1rem;">
+                            <label style="font-size: 0.85rem; color: var(--text-light); text-transform: uppercase; letter-spacing: 1px; display: block; margin-bottom: 0.3rem;">Correo (Usuario):</label>
+                            <div style="font-weight: 600; font-size: 1.1rem; color: var(--primary);">${email}</div>
+                        </div>
+                        <div>
+                            <label style="font-size: 0.85rem; color: var(--text-light); text-transform: uppercase; letter-spacing: 1px; display: block; margin-bottom: 0.3rem;">Contraseña Temporal:</label>
+                            <div style="font-weight: 600; font-size: 1.3rem; letter-spacing: 2px; color: var(--text-dark); background: white; padding: 0.5rem; border-radius: 6px; display: inline-block; border: 1px dashed var(--text-light);">${password}</div>
+                        </div>
+                        ` : `<p style="color: var(--text-light); font-style: italic;">No se generó cuenta de tutor (correo no proporcionado).</p>`}
+                    </div>
+                    
+                    <button class="btn btn-primary" style="width: 100%; font-size: 1.1rem; padding: 1rem;" onclick="navigate('doctor-dashboard')">
+                        Ir a mi Panel de Control
+                    </button>
+                </div>
+                
+                <div style="text-align: center; border-left: 1px solid var(--background); padding-left: 3rem;">
+                    <h3 style="margin-bottom: 1rem; color: var(--text-dark);">Acceso Rápido</h3>
+                    <p style="color: var(--text-light); font-size: 0.95rem; margin-bottom: 2rem;">Escanea este código QR con la cámara del celular para ir directo a la pantalla de inicio de sesión.</p>
+                    
+                    <div style="background: white; padding: 1rem; border-radius: 12px; box-shadow: var(--shadow-md); display: inline-block;">
+                        <img src="${qrUrl}" alt="QR Login" style="width: 200px; height: 200px; display: block;">
+                    </div>
+                </div>
+            </div>
         </div>
     `;
 }
@@ -947,6 +1010,13 @@ function renderOnboarding() {
                 <label>¿Cómo se sienten ustedes emocionalmente con esta nueva etapa?</label>
                 <textarea class="form-control" rows="2" placeholder="Ej. Muy cansados pero felices..."></textarea>
             </div>
+            <hr style="border: 0; border-top: 1px solid #E2E8F0; margin: 2rem 0;">
+            <h3 style="margin-bottom: 1.5rem; color: var(--primary); font-size: 1.2rem;">Crear Acceso para el Tutor</h3>
+            <p style="color: var(--text-light); font-size: 0.9rem; margin-bottom: 1rem;">Al finalizar se generará automáticamente una contraseña para que el tutor pueda acceder a la plataforma.</p>
+            <div class="form-group">
+                <label>Correo Electrónico del Tutor</label>
+                <input type="email" id="tutorEmail" class="form-control" placeholder="ej. tutor@correo.com">
+            </div>
         `;
     }
 
@@ -1271,12 +1341,42 @@ window.finishOnboarding = function() {
     
     console.log("¡Paciente creado! Datos del expediente:", newPatient);
     
-    alert("¡Perfil de " + newName + " guardado con todos sus datos exitosamente!");
+    const tutorEmail = window.newPatientData['tutorEmail'];
+    let generatedPassword = '';
+    const momName = window.newPatientData['Ej. María Gómez'] || 'No especificado';
+    const dadName = window.newPatientData['Ej. Carlos Pérez'] || 'No especificado';
+
+    if (tutorEmail) {
+        const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
+        for (let i = 0; i < 8; i++) {
+            generatedPassword += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+
+        const newTutor = {
+            id: users.length > 0 ? Math.max(...users.map(u => u.id)) + 1 : 1,
+            email: tutorEmail,
+            password: generatedPassword,
+            role: 'tutor',
+            name: 'Tutor de ' + newName
+        };
+        users.push(newTutor);
+        localStorage.setItem('peditrack_users', JSON.stringify(users));
+    }
+    
+    window.successData = {
+        patientName: newName,
+        tutorEmail: tutorEmail,
+        password: generatedPassword,
+        momName: momName,
+        dadName: dadName
+    };
     
     currentOnboardingStep = 1;
     window.newPatientName = ""; 
     window.newPatientData = {}; 
-    navigate('doctor-dashboard');
+    currentView = 'onboarding-success';
+    renderApp();
+    window.scrollTo(0,0);
 }
 
 // Modals
