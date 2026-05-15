@@ -32,52 +32,79 @@ function getRoleDefaultView(role) {
 
 let currentView = currentUser ? getRoleDefaultView(currentUser.role) : 'login';
 let currentOnboardingStep = 1;
+let currentPatientId = null;  // ID of the patient currently being viewed
+window.adminSelectedDoctorId = null;  // ID of selected doctor in admin panel
+
 
 // Main Render Function
 function renderApp() {
     const app = document.getElementById('app');
-    
-    let headerAction = '';
-    if (currentUser) {
-        headerAction = `<button class="btn btn-secondary" onclick="handleLogout()" style="display: flex; align-items: center; gap: 0.5rem;"><i class="fa-solid fa-arrow-right-from-bracket"></i> Salir</button>`;
-    }
+    if (!app) return;
 
-    let html = `
-        <header>
-            <div class="logo cursor-pointer" onclick="${currentUser ? "navigate(getRoleDefaultView(currentUser.role))" : "navigate('login')"}">
-                <i class="fa-solid fa-baby-carriage"></i> PediTrack
-            </div>
-            ${headerAction}
-        </header>
-        <main class="container animate-fade-in" id="main-content">
-    `;
+    try {
+        let headerAction = '';
+        if (currentUser) {
+            headerAction = `<button class="btn btn-secondary" onclick="handleLogout()" style="display: flex; align-items: center; gap: 0.5rem;"><i class="fa-solid fa-arrow-right-from-bracket"></i> Salir</button>`;
+        }
 
-    if (currentView === 'login') {
-        html += renderLogin();
-    } else if (currentView === 'admin-dashboard') {
-        html += renderAdminDashboard();
-    } else if (currentView === 'doctor-dashboard') {
-        html += renderDoctorDashboard();
-    } else if (currentView === 'parent-profile') {
-        html += renderParentProfile();
-    } else if (currentView === 'patient-onboarding') {
-        html += renderOnboarding();
-    } else if (currentView === 'onboarding-success') {
-        html += renderOnboardingSuccess();
-    }
+        let html = `
+            <header>
+                <div class="logo cursor-pointer" onclick="${currentUser ? "navigate(getRoleDefaultView(currentUser.role))" : "navigate('login')"}">
+                    <i class="fa-solid fa-baby-carriage"></i> PediTrack
+                </div>
+                ${headerAction}
+            </header>
+            <main class="container animate-fade-in" id="main-content">
+        `;
 
-    html += `</main>`;
-    
-    // Add Modals
-    html += renderModals();
+        if (currentView === 'login') {
+            html += renderLogin();
+        } else if (currentView === 'admin-dashboard') {
+            html += renderAdminDashboard();
+        } else if (currentView === 'doctor-dashboard') {
+            html += renderDoctorDashboard();
+        } else if (currentView === 'parent-profile') {
+            html += renderParentProfile();
+        } else if (currentView === 'patient-onboarding') {
+            html += renderOnboarding();
+        } else if (currentView === 'onboarding-success') {
+            html += renderOnboardingSuccess();
+        } else {
+            // Unknown view — reset to login
+            currentView = currentUser ? getRoleDefaultView(currentUser.role) : 'login';
+            html += renderLogin();
+        }
 
-    app.innerHTML = html;
+        html += `</main>`;
 
-    // After Render logic
-    if (currentView === 'parent-profile') {
-        initChart();
+        // Add Modals
+        html += renderModals();
+
+        app.innerHTML = html;
+
+        // After Render logic
+        if (currentView === 'parent-profile') {
+            initChart();
+        }
+    } catch (e) {
+        console.error('PediTrack renderApp error:', e);
+        // Show a recovery screen instead of blank page
+        app.innerHTML = `
+            <header>
+                <div class="logo"><i class="fa-solid fa-baby-carriage"></i> PediTrack</div>
+            </header>
+            <main class="container" style="text-align:center; margin-top: 4rem;">
+                <i class="fa-solid fa-triangle-exclamation" style="font-size:3rem; color:#ef4444; margin-bottom:1rem;"></i>
+                <h2 style="margin-bottom:1rem;">Ocurrió un error inesperado</h2>
+                <p style="color:var(--text-light); margin-bottom:2rem;">Error: ${e.message}</p>
+                <button class="btn btn-primary" onclick="localStorage.removeItem('peditrack_user'); location.reload()">
+                    <i class="fa-solid fa-rotate-right"></i> Volver al inicio
+                </button>
+            </main>
+        `;
     }
 }
+
 
 // Views
 function renderLogin() {
@@ -112,9 +139,121 @@ function renderLogin() {
     `;
 }
 
+function renderDoctorPanel() {
+    if (!window.adminSelectedDoctorId) {
+        return '<div style="margin-top: 0.75rem; padding: 0.75rem 1rem; background: #f8fafc; border-radius: 8px; color: var(--text-light); font-size: 0.9rem; display: flex; align-items: center; gap: 0.5rem;"><i class="fa-solid fa-hand-pointer" style="color: var(--primary);"></i> Haz clic en un pediatra para ver sus pacientes asignados.</div>';
+    }
+    const selectedDoc = users.find(u => u.id === window.adminSelectedDoctorId);
+    if (!selectedDoc) return '';
+    const docPatients = patients.filter(p => p.doctorId === selectedDoc.id);
+
+    let patientsBody = '';
+    if (docPatients.length > 0) {
+        patientsBody = `
+        <table style="width: 100%; text-align: left; border-collapse: collapse;">
+            <thead>
+                <tr style="border-bottom: 1px solid var(--background); color: var(--text-light); font-size: 0.85rem; background: #fafafa;">
+                    <th style="padding: 0.8rem 1.5rem;">Paciente</th>
+                    <th style="padding: 0.8rem 1.5rem;">Edad</th>
+                    <th style="padding: 0.8rem 1.5rem;">Peso</th>
+                    <th style="padding: 0.8rem 1.5rem;">Talla</th>
+                    <th style="padding: 0.8rem 1.5rem; text-align: right;">Acción</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${docPatients.map(p => `
+                <tr style="border-bottom: 1px solid var(--background);">
+                    <td style="padding: 0.9rem 1.5rem; font-weight: 500;">
+                        <div style="display: flex; align-items: center; gap: 0.6rem;">
+                            <div style="width: 32px; height: 32px; background: var(--secondary); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-weight: 700; font-size: 0.85rem; flex-shrink: 0;">${p.name.charAt(0).toUpperCase()}</div>
+                            ${p.name}
+                        </div>
+                    </td>
+                    <td style="padding: 0.9rem 1.5rem; color: var(--text-light);">${calculateAgeString(p.onboardingData ? p.onboardingData['Fecha de nacimiento'] : null, p.age)}</td>
+                    <td style="padding: 0.9rem 1.5rem; color: var(--text-light);">${p.weight} kg</td>
+                    <td style="padding: 0.9rem 1.5rem; color: var(--text-light);">${p.height} cm</td>
+                    <td style="padding: 0.9rem 1.5rem; text-align: right;">
+                        <button class="btn btn-secondary" style="padding: 0.3rem 0.75rem; font-size: 0.8rem;" onclick="viewPatient(${p.id})">
+                            <i class="fa-solid fa-eye"></i> Ver expediente
+                        </button>
+                    </td>
+                </tr>
+                `).join('')}
+            </tbody>
+        </table>`;
+    } else {
+        patientsBody = `
+        <div style="padding: 2.5rem; text-align: center; color: var(--text-light);">
+            <i class="fa-solid fa-folder-open" style="font-size: 2.5rem; color: #e2e8f0; margin-bottom: 1rem; display: block;"></i>
+            Este pediatra aún no tiene pacientes asignados.
+        </div>`;
+    }
+
+    return `
+    <div id="docPatientsPanel" style="background: white; border-radius: 15px; margin-top: 1rem; box-shadow: var(--shadow-sm); overflow: hidden; border-left: 4px solid var(--primary);">
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 1.25rem 1.5rem; background: var(--primary-light); border-bottom: 1px solid #e2e8f0;">
+            <div style="display: flex; align-items: center; gap: 0.75rem;">
+                <div style="width: 40px; height: 40px; background: var(--primary); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-weight: 700; font-size: 1.1rem;">${selectedDoc.name.charAt(0)}</div>
+                <div>
+                    <div style="font-weight: 700; color: var(--text-dark);">${selectedDoc.name}</div>
+                    <div style="font-size: 0.85rem; color: var(--text-light);">${selectedDoc.email} &bull; ${docPatients.length} paciente${docPatients.length !== 1 ? 's' : ''} asignado${docPatients.length !== 1 ? 's' : ''}</div>
+                </div>
+            </div>
+            <button onclick="window.adminSelectedDoctorId = null; renderApp()" style="background: transparent; border: none; cursor: pointer; color: var(--text-light); font-size: 1.2rem; padding: 0.3rem;"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        ${patientsBody}
+    </div>`;
+}
+
 function renderAdminDashboard() {
     const pediatricians = users.filter(u => u.role === 'pediatra');
     const tutors = users.filter(u => u.role === 'tutor');
+
+    const pediatricianRows = pediatricians.map(u => {
+        const count = patients.filter(p => p.doctorId === u.id).length;
+        const isSelected = window.adminSelectedDoctorId === u.id;
+        const bgColor = isSelected ? 'var(--primary-light)' : 'transparent';
+        const badgeBg = count > 0 ? 'var(--primary)' : '#e2e8f0';
+        const badgeColor = count > 0 ? 'white' : 'var(--text-light)';
+        return `
+        <tr style="border-bottom: 1px solid var(--background); background: ${bgColor}; cursor: pointer; transition: background 0.2s;" onclick="selectPediatrician(${u.id})">
+            <td style="padding: 1rem 0; font-weight: 600; color: var(--primary);">
+                <i class="fa-solid fa-user-doctor" style="margin-right: 0.5rem; font-size: 0.9rem; color: var(--secondary);"></i>${u.name}
+            </td>
+            <td style="padding: 1rem 0; color: var(--text-light);">${u.email}</td>
+            <td style="padding: 1rem 0; text-align: center;">
+                <span style="background: ${badgeBg}; color: ${badgeColor}; border-radius: 20px; padding: 0.2rem 0.75rem; font-size: 0.85rem; font-weight: 600;">${count}</span>
+            </td>
+            <td style="padding: 1rem 0; text-align: right;" onclick="event.stopPropagation()">
+                <button class="btn" style="padding: 0.3rem 0.6rem; font-size: 0.8rem; background: transparent; color: var(--primary); box-shadow: none;" onclick="editUser(${u.id})" title="Editar credenciales"><i class="fa-solid fa-key"></i></button>
+                <button class="btn" style="padding: 0.3rem 0.6rem; font-size: 0.8rem; background: transparent; color: #ef4444; box-shadow: none;" onclick="deleteUser(${u.id})" title="Eliminar"><i class="fa-solid fa-trash"></i></button>
+            </td>
+        </tr>`;
+    }).join('');
+
+    const noPediatricianRow = pediatricians.length === 0
+        ? '<tr><td colspan="4" style="padding: 1rem 0; text-align: center; color: var(--text-light);">No hay pediatras registrados.</td></tr>'
+        : '';
+
+    const patientRows = patients.map(p => {
+        const doc = users.find(u => u.id === p.doctorId);
+        const docName = doc ? doc.name : '<span style="color: #ef4444;">Sin asignar</span>';
+        return `
+        <tr style="border-bottom: 1px solid var(--background);">
+            <td style="padding: 1rem 0; font-weight: 500;">${p.name}</td>
+            <td style="padding: 1rem 0; color: var(--text-light);">${calculateAgeString(p.onboardingData ? p.onboardingData['Fecha de nacimiento'] : null, p.age)}</td>
+            <td style="padding: 1rem 0;">${docName}</td>
+            <td style="padding: 1rem 0; text-align: right;">
+                <button class="btn btn-secondary" style="padding: 0.3rem 0.8rem; font-size: 0.8rem;" onclick="openAssignPatientModal(${p.id})">
+                    <i class="fa-solid fa-user-doctor"></i> Cambiar
+                </button>
+            </td>
+        </tr>`;
+    }).join('');
+
+    const noPatientsRow = patients.length === 0
+        ? '<tr><td colspan="4" style="padding: 1rem 0; text-align: center; color: var(--text-light);">No hay pacientes registrados.</td></tr>'
+        : '';
 
     return `
         <div class="dashboard">
@@ -124,7 +263,7 @@ function renderAdminDashboard() {
                     <p style="color: var(--text-light);">Bienvenido, ${currentUser ? currentUser.name : 'Admin'}</p>
                 </div>
             </div>
-            
+
             <div class="profile-stats">
                 <div class="stat-card">
                     <div class="stat-label">Total Pacientes</div>
@@ -142,7 +281,7 @@ function renderAdminDashboard() {
                     <p style="color: var(--secondary); font-size: 0.9rem;">Registrados</p>
                 </div>
             </div>
-            
+
             <div class="history-section" style="margin-top: 2rem;">
                 <div style="display: flex; justify-content: space-between; align-items: center;">
                     <h2>Gestión de Pediatras</h2>
@@ -161,88 +300,12 @@ function renderAdminDashboard() {
                             </tr>
                         </thead>
                         <tbody>
-                            ${pediatricians.map(u => {
-                                const count = patients.filter(p => p.doctorId === u.id).length;
-                                const isSelected = window.adminSelectedDoctorId === u.id;
-                                return `
-                            <tr style="border-bottom: 1px solid var(--background); background: ${isSelected ? 'var(--primary-light)' : 'transparent'}; cursor: pointer; transition: background 0.2s;" onclick="selectPediatrician(${u.id})">
-                                <td style="padding: 1rem 0; font-weight: 600; color: var(--primary);">
-                                    <i class="fa-solid fa-user-doctor" style="margin-right: 0.5rem; font-size: 0.9rem; color: var(--secondary);"></i>${u.name}
-                                </td>
-                                <td style="padding: 1rem 0; color: var(--text-light);">${u.email}</td>
-                                <td style="padding: 1rem 0; text-align: center;">
-                                    <span style="background: ${count > 0 ? 'var(--primary)' : '#e2e8f0'}; color: ${count > 0 ? 'white' : 'var(--text-light)'}; border-radius: 20px; padding: 0.2rem 0.75rem; font-size: 0.85rem; font-weight: 600;">${count}</span>
-                                </td>
-                                <td style="padding: 1rem 0; text-align: right;" onclick="event.stopPropagation()">
-                                    <button class="btn" style="padding: 0.3rem 0.6rem; font-size: 0.8rem; background: transparent; color: var(--primary); box-shadow: none;" onclick="editUser(${u.id})" title="Editar credenciales"><i class="fa-solid fa-key"></i></button>
-                                    <button class="btn" style="padding: 0.3rem 0.6rem; font-size: 0.8rem; background: transparent; color: #ef4444; box-shadow: none;" onclick="deleteUser(${u.id})" title="Eliminar"><i class="fa-solid fa-trash"></i></button>
-                                </td>
-                            </tr>`;
-                            }).join('')}
-                            ${pediatricians.length === 0 ? '<tr><td colspan="4" style="padding: 1rem 0; text-align: center; color: var(--text-light);">No hay pediatras registrados.</td></tr>' : ''}
+                            ${pediatricianRows}
+                            ${noPediatricianRow}
                         </tbody>
                     </table>
                 </div>
-
-                ${(() => {
-                    if (!window.adminSelectedDoctorId) return `
-                    <div style="margin-top: 0.75rem; padding: 0.75rem 1rem; background: #f8fafc; border-radius: 8px; color: var(--text-light); font-size: 0.9rem; display: flex; align-items: center; gap: 0.5rem;">
-                        <i class="fa-solid fa-hand-pointer" style="color: var(--primary);"></i>
-                        Haz clic en un pediatra para ver sus pacientes asignados.
-                    </div>`;
-                    const selectedDoc = users.find(u => u.id === window.adminSelectedDoctorId);
-                    if (!selectedDoc) return '';
-                    const docPatients = patients.filter(p => p.doctorId === selectedDoc.id);
-                    return `
-                    <div style="background: white; border-radius: 15px; margin-top: 1rem; box-shadow: var(--shadow-sm); overflow: hidden; border-left: 4px solid var(--primary);">
-                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 1.25rem 1.5rem; background: var(--primary-light); border-bottom: 1px solid #e2e8f0;">
-                            <div style="display: flex; align-items: center; gap: 0.75rem;">
-                                <div style="width: 40px; height: 40px; background: var(--primary); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-weight: 700; font-size: 1.1rem;">${selectedDoc.name.charAt(0)}</div>
-                                <div>
-                                    <div style="font-weight: 700; color: var(--text-dark);">${selectedDoc.name}</div>
-                                    <div style="font-size: 0.85rem; color: var(--text-light);">${selectedDoc.email} &bull; ${docPatients.length} paciente${docPatients.length !== 1 ? 's' : ''} asignado${docPatients.length !== 1 ? 's' : ''}</div>
-                                </div>
-                            </div>
-                            <button onclick="window.adminSelectedDoctorId = null; renderApp()" style="background: transparent; border: none; cursor: pointer; color: var(--text-light); font-size: 1.2rem; padding: 0.3rem;"><i class="fa-solid fa-xmark"></i></button>
-                        </div>
-                        ${docPatients.length > 0 ? `
-                        <table style="width: 100%; text-align: left; border-collapse: collapse;">
-                            <thead>
-                                <tr style="border-bottom: 1px solid var(--background); color: var(--text-light); font-size: 0.85rem; background: #fafafa;">
-                                    <th style="padding: 0.8rem 1.5rem;">Paciente</th>
-                                    <th style="padding: 0.8rem 1.5rem;">Edad</th>
-                                    <th style="padding: 0.8rem 1.5rem;">Peso</th>
-                                    <th style="padding: 0.8rem 1.5rem;">Talla</th>
-                                    <th style="padding: 0.8rem 1.5rem; text-align: right;">Acción</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                ${docPatients.map(p => `
-                                <tr style="border-bottom: 1px solid var(--background);">
-                                    <td style="padding: 0.9rem 1.5rem; font-weight: 500;">
-                                        <div style="display: flex; align-items: center; gap: 0.6rem;">
-                                            <div style="width: 32px; height: 32px; background: var(--secondary); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-weight: 700; font-size: 0.85rem; flex-shrink: 0;">${p.name.charAt(0).toUpperCase()}</div>
-                                            ${p.name}
-                                        </div>
-                                    </td>
-                                    <td style="padding: 0.9rem 1.5rem; color: var(--text-light);">${calculateAgeString(p.onboardingData ? p.onboardingData['Fecha de nacimiento'] : null, p.age)}</td>
-                                    <td style="padding: 0.9rem 1.5rem; color: var(--text-light);">${p.weight} kg</td>
-                                    <td style="padding: 0.9rem 1.5rem; color: var(--text-light);">${p.height} cm</td>
-                                    <td style="padding: 0.9rem 1.5rem; text-align: right;">
-                                        <button class="btn btn-secondary" style="padding: 0.3rem 0.75rem; font-size: 0.8rem;" onclick="viewPatient(${p.id})">
-                                            <i class="fa-solid fa-eye"></i> Ver expediente
-                                        </button>
-                                    </td>
-                                </tr>
-                                `).join('')}
-                            </tbody>
-                        </table>` : `
-                        <div style="padding: 2.5rem; text-align: center; color: var(--text-light);">
-                            <i class="fa-solid fa-folder-open" style="font-size: 2.5rem; color: #e2e8f0; margin-bottom: 1rem; display: block;"></i>
-                            Este pediatra aún no tiene pacientes asignados.
-                        </div>`}
-                    </div>`;
-                })()}
+                ${renderDoctorPanel()}
             </div>
 
             <div class="history-section" style="margin-top: 2rem;">
@@ -259,22 +322,8 @@ function renderAdminDashboard() {
                             </tr>
                         </thead>
                         <tbody>
-                            ${patients.map(p => {
-                                const doc = users.find(u => u.id === p.doctorId);
-                                const docName = doc ? doc.name : '<span style="color: #ef4444;">Sin asignar</span>';
-                                return `
-                            <tr style="border-bottom: 1px solid var(--background);">
-                                <td style="padding: 1rem 0; font-weight: 500;">${p.name}</td>
-                                <td style="padding: 1rem 0; color: var(--text-light);">${calculateAgeString(p.onboardingData ? p.onboardingData['Fecha de nacimiento'] : null, p.age)}</td>
-                                <td style="padding: 1rem 0;">${docName}</td>
-                                <td style="padding: 1rem 0; text-align: right;">
-                                    <button class="btn btn-secondary" style="padding: 0.3rem 0.8rem; font-size: 0.8rem;" onclick="openAssignPatientModal(${p.id})">
-                                        <i class="fa-solid fa-user-doctor"></i> Cambiar
-                                    </button>
-                                </td>
-                            </tr>
-                            `}).join('')}
-                            ${patients.length === 0 ? '<tr><td colspan="4" style="padding: 1rem 0; text-align: center; color: var(--text-light);">No hay pacientes registrados.</td></tr>' : ''}
+                            ${patientRows}
+                            ${noPatientsRow}
                         </tbody>
                     </table>
                 </div>
@@ -282,6 +331,7 @@ function renderAdminDashboard() {
         </div>
     `;
 }
+
 
 function calculateAgeString(birthDateStr, fallbackAge) {
     if (!birthDateStr) return fallbackAge || '0 meses';
