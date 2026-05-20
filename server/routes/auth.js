@@ -4,6 +4,7 @@ const jwt = require('jsonwebtoken');
 const { db } = require('../database');
 const { requireAuth } = require('../middleware/auth');
 const { requireRole } = require('../middleware/roles');
+const { sendPasswordResetEmail } = require('../services/emailService');
 
 const router = express.Router();
 
@@ -77,6 +78,30 @@ router.post('/reset-password/:userId', requireAuth, requireRole('admin', 'pediat
 
   db.prepare('UPDATE users SET password = ? WHERE id = ?').run(bcrypt.hashSync(newPassword, 10), targetId);
   res.json({ message: 'Contraseña reseteada correctamente' });
+});
+
+// POST /api/auth/forgot-password — genera contraseña temporal y la envía por correo
+router.post('/forgot-password', (req, res) => {
+  const { email } = req.body;
+  if (!email) return res.status(400).json({ error: 'El correo es requerido' });
+
+  const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email.trim().toLowerCase());
+
+  // Siempre responder igual para no revelar si el email existe
+  if (!user) {
+    return res.json({ message: 'Si ese correo existe en el sistema, recibirás las instrucciones.' });
+  }
+
+  const tempPassword = Math.random().toString(36).slice(-6).toUpperCase() +
+                       Math.floor(Math.random() * 900 + 100);
+
+  db.prepare('UPDATE users SET password = ? WHERE id = ?')
+    .run(bcrypt.hashSync(tempPassword, 10), user.id);
+
+  sendPasswordResetEmail({ to: user.email, name: user.name, password: tempPassword })
+    .catch(err => console.warn('⚠ Correo de recuperación no enviado:', err.message));
+
+  res.json({ message: 'Si ese correo existe en el sistema, recibirás las instrucciones.' });
 });
 
 module.exports = router;

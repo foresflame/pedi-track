@@ -133,7 +133,12 @@ function renderLogin() {
         <input type="password" id="loginPass" class="form-control" placeholder="••••••••" value="Doc2024!" onkeydown="if(event.key==='Enter') handleLogin()">
       </div>
       <button class="btn btn-primary" style="width:100%;margin-top:1rem;padding:0.8rem;font-size:1.1rem;" onclick="handleLogin()">Entrar</button>
-      <div style="margin-top:2rem;font-size:0.85rem;color:var(--text-light);background:var(--primary-light);padding:1rem;border-radius:8px;">
+      <div style="text-align:center;margin-top:1rem;">
+        <a href="#" style="font-size:0.85rem;color:var(--primary);text-decoration:none;" onclick="openModal('forgotPasswordModal');return false;">
+          ¿Olvidaste tu contraseña?
+        </a>
+      </div>
+      <div style="margin-top:1.5rem;font-size:0.85rem;color:var(--text-light);background:var(--primary-light);padding:1rem;border-radius:8px;">
         <strong style="color:var(--primary);display:block;margin-bottom:0.5rem;">Usuarios de prueba:</strong>
         <ul style="margin:0;padding-left:1.2rem;line-height:1.8;">
           <li>admin@peditrack.com / Admin2024!</li>
@@ -757,6 +762,28 @@ window.cancelMyAppointment = async function(id) {
 // === Modals HTML ===
 function renderModals() {
   return `
+    <!-- Forgot Password Modal -->
+    <div class="modal-overlay" id="forgotPasswordModal" onclick="if(event.target===this)closeModal('forgotPasswordModal')">
+      <div class="modal-content" style="max-width:420px;">
+        <div class="modal-header">
+          <h2><i class="fa-solid fa-key" style="color:var(--primary);margin-right:0.5rem;"></i>Recuperar Contraseña</h2>
+          <button class="close-btn" onclick="closeModal('forgotPasswordModal')"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div id="forgotMsg" style="display:none;background:#d1fae5;color:#065f46;padding:0.75rem 1rem;border-radius:8px;margin-bottom:1rem;font-size:0.9rem;"></div>
+        <p style="color:var(--text-light);font-size:0.9rem;margin-bottom:1.25rem;">Ingresa tu correo y te enviaremos una contraseña temporal para acceder.</p>
+        <div class="form-group">
+          <label>Correo Electrónico</label>
+          <input type="email" id="forgotEmail" class="form-control" placeholder="tu@correo.com" onkeydown="if(event.key==='Enter')sendForgotPassword()">
+        </div>
+        <div style="display:flex;gap:0.75rem;justify-content:flex-end;margin-top:1.5rem;">
+          <button class="btn btn-secondary" onclick="closeModal('forgotPasswordModal')">Cancelar</button>
+          <button class="btn btn-primary" onclick="sendForgotPassword()" id="forgotBtn">
+            <i class="fa-solid fa-paper-plane"></i> Enviar
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- Add Consult Modal -->
     <div class="modal-overlay" id="addConsultModal" onclick="if(event.target===this)closeModal('addConsultModal')">
       <div class="modal-content">
@@ -1152,6 +1179,28 @@ window.filterPatients = function(query) {
 };
 
 // === Auth handlers ===
+window.sendForgotPassword = async function() {
+  const email = document.getElementById('forgotEmail')?.value?.trim();
+  if (!email) { alert('Ingresa tu correo electrónico.'); return; }
+
+  const btn = document.getElementById('forgotBtn');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Enviando...'; }
+
+  try {
+    await API.post('/auth/forgot-password', { email });
+    const msg = document.getElementById('forgotMsg');
+    if (msg) {
+      msg.style.display = 'block';
+      msg.innerHTML = '<i class="fa-solid fa-circle-check"></i> Si ese correo está registrado, recibirás tu contraseña temporal en unos segundos.';
+    }
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-check"></i> Enviado'; }
+    setTimeout(() => closeModal('forgotPasswordModal'), 3500);
+  } catch (e) {
+    alert('Error: ' + e.message);
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Enviar'; }
+  }
+};
+
 window.handleLogin = async function() {
   const email = document.getElementById('loginEmail').value;
   const pass  = document.getElementById('loginPass').value;
