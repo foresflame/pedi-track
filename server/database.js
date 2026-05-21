@@ -1,4 +1,4 @@
-const Database = require('better-sqlite3');
+﻿const Database = require('better-sqlite3');
 const bcrypt = require('bcryptjs');
 const path = require('path');
 
@@ -36,7 +36,7 @@ CREATE TABLE IF NOT EXISTS consultations (
   patient_id  INTEGER NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
   doctor_id   INTEGER REFERENCES users(id) ON DELETE SET NULL,
   date        TEXT    NOT NULL,
-  type        TEXT    DEFAULT 'Control de niño sano',
+  type        TEXT    DEFAULT 'Control de niÃ±o sano',
   weight      REAL,
   height      REAL,
   head_circ   REAL,
@@ -75,18 +75,18 @@ function seedDefaultUsers() {
   const insert = db.prepare('INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)');
   const seed = db.transaction(() => {
     insert.run('Administrador Principal', 'admin@peditrack.com', bcrypt.hashSync('Admin2024!', 10), 'admin');
-    insert.run('Dr. Roberto Pediátrico', 'doc@peditrack.com', bcrypt.hashSync('Doc2024!', 10), 'pediatra');
+    insert.run('Dr. Roberto PediÃ¡trico', 'doc@peditrack.com', bcrypt.hashSync('Doc2024!', 10), 'pediatra');
     insert.run('Padre/Madre de Prueba', 'tutor@peditrack.com', bcrypt.hashSync('Tutor2024!', 10), 'tutor');
   });
   seed();
-  console.log('✓ Usuarios de prueba creados (admin, pediatra, tutor)');
+  console.log('âœ“ Usuarios de prueba creados (admin, pediatra, tutor)');
 }
 
 function runMigrations() {
-  // Fase F: próxima visita sugerida en consultas
+  // Fase F: prÃ³xima visita sugerida en consultas
   try { db.prepare('ALTER TABLE consultations ADD COLUMN next_visit_date TEXT').run(); } catch (e) {}
 
-  // Fase A: historia clínica estructurada en patients
+  // Fase A: historia clÃ­nica estructurada en patients
   const phaseACols = [
     'ALTER TABLE patients ADD COLUMN birth_state       TEXT',
     'ALTER TABLE patients ADD COLUMN birth_city        TEXT',
@@ -125,14 +125,27 @@ function runMigrations() {
     );
   `);
 
-  console.log('✓ Migraciones ejecutadas');
+  // Fase C: signos vitales en consultas
+  const faseCCols = [
+    'ALTER TABLE consultations ADD COLUMN heart_rate   INTEGER',
+    'ALTER TABLE consultations ADD COLUMN resp_rate    INTEGER',
+    'ALTER TABLE consultations ADD COLUMN temperature  REAL',
+    'ALTER TABLE consultations ADD COLUMN spo2         REAL',
+    'ALTER TABLE consultations ADD COLUMN bp_systolic  INTEGER',
+    'ALTER TABLE consultations ADD COLUMN bp_diastolic INTEGER',
+  ];
+  for (const sql of faseCCols) {
+    try { db.prepare(sql).run(); } catch (e) {}
+  }
+
+  console.log('âœ“ Migraciones ejecutadas');
 }
 
 function initDB() {
   db.exec(SCHEMA);
   runMigrations();
   seedDefaultUsers();
-  console.log('✓ Base de datos inicializada');
+  console.log('âœ“ Base de datos inicializada');
 }
 
 module.exports = { db, initDB };

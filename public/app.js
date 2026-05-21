@@ -379,6 +379,44 @@ function renderParentProfile() {
               <div class="metric"><i class="fa-solid fa-ruler-vertical"></i> ${h.height} cm</div>
               ${h.head_circ ? `<div class="metric"><i class="fa-solid fa-head-side-measles" style="color:var(--secondary)"></i> ${h.head_circ} cm</div>` : ''}
             </div>
+            ${(() => {
+              const vs = [];
+              if (h.heart_rate)   vs.push({ icon:'fa-heart',           val:`${h.heart_rate} lpm`,  key:'heart_rate'   });
+              if (h.resp_rate)    vs.push({ icon:'fa-lungs',            val:`${h.resp_rate} rpm`,   key:'resp_rate'    });
+              if (h.temperature)  vs.push({ icon:'fa-thermometer-half', val:`${h.temperature} °C`,  key:'temperature'  });
+              if (h.spo2)         vs.push({ icon:'fa-droplet',          val:`${h.spo2}%`,           key:'spo2'         });
+              if (h.bp_systolic)  vs.push({ icon:'fa-gauge',            val:`${h.bp_systolic}${h.bp_diastolic?'/'+h.bp_diastolic:''} mmHg`, key:'bp_systolic' });
+              if (vs.length === 0) return '';
+              // Compute alert colours using same thresholds as backend
+              const birthDate = currentPatient?.birth_date;
+              const ageMonths = birthDate ? Math.floor((new Date() - new Date(birthDate)) / (30.44*86400000)) : null;
+              function alertLevel(key, val) {
+                if (ageMonths === null || val == null) return 'normal';
+                if (key === 'heart_rate') {
+                  const [lo,hi] = ageMonths<1?[100,180]:ageMonths<12?[100,160]:ageMonths<24?[90,150]:ageMonths<60?[80,140]:ageMonths<144?[70,120]:[60,100];
+                  return val<lo||val>hi ? (val<lo*0.85||val>hi*1.15?'danger':'warning') : 'normal';
+                }
+                if (key === 'resp_rate') {
+                  const [lo,hi] = ageMonths<2?[30,60]:ageMonths<12?[25,50]:ageMonths<60?[20,40]:[15,30];
+                  return val<lo||val>hi ? (val<lo*0.8||val>hi*1.2?'danger':'warning') : 'normal';
+                }
+                if (key === 'temperature') return val<36.0||val>=38.5?'danger':val>=37.6?'warning':'normal';
+                if (key === 'spo2') return val<90?'danger':val<95?'warning':'normal';
+                if (key === 'bp_systolic') {
+                  const [lo,hi] = ageMonths<12?[65,100]:ageMonths<36?[70,110]:ageMonths<60?[75,115]:ageMonths<120?[80,120]:[90,130];
+                  return val<lo||val>hi ? (val>hi+10||val<lo-10?'danger':'warning') : 'normal';
+                }
+                return 'normal';
+              }
+              const chips = vs.map(v => {
+                const lvl = alertLevel(v.key, parseFloat(v.val));
+                const bg  = lvl==='danger'?'#fef2f2':lvl==='warning'?'#fffbeb':'#f8fafc';
+                const col = lvl==='danger'?'#dc2626':lvl==='warning'?'#d97706':'#64748b';
+                const ico = lvl==='danger'?'⚠ ':lvl==='warning'?'⚡ ':'';
+                return `<span style="display:inline-flex;align-items:center;gap:0.3rem;background:${bg};color:${col};border:1px solid ${col}33;border-radius:99px;padding:0.2rem 0.6rem;font-size:0.75rem;font-weight:500;"><i class="fa-solid ${v.icon}"></i> ${ico}${v.val}</span>`;
+              }).join('');
+              return `<div style="display:flex;flex-wrap:wrap;gap:0.4rem;margin-top:0.5rem;">${chips}</div>`;
+            })()}
             ${h.next_visit_date ? (() => {
               const today = new Date().toISOString().slice(0, 10);
               const daysLeft = Math.round((new Date(h.next_visit_date) - new Date(today)) / 86_400_000);
@@ -878,13 +916,49 @@ function renderModals() {
 
     <!-- Add Consult Modal -->
     <div class="modal-overlay" id="addConsultModal" onclick="if(event.target===this)closeModal('addConsultModal')">
-      <div class="modal-content">
+      <div class="modal-content" style="max-width:680px;">
         <div class="modal-header"><h2>Registrar Consulta</h2><button class="close-btn" onclick="closeModal('addConsultModal')"><i class="fa-solid fa-xmark"></i></button></div>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem;">
-          <div class="form-group"><label>Peso (kg)</label><input type="number" id="consultWeight" step="0.1" class="form-control" placeholder="Ej. 8.5"></div>
-          <div class="form-group"><label>Estatura (cm)</label><input type="number" id="consultHeight" step="0.1" class="form-control" placeholder="Ej. 71"></div>
-          <div class="form-group"><label>P. Cefálico</label><input type="number" id="consultHead" step="0.1" class="form-control" placeholder="Ej. 45"></div>
+
+        <!-- Antropometría -->
+        <p style="font-weight:600;color:var(--primary);margin-bottom:0.75rem;font-size:0.9rem;text-transform:uppercase;letter-spacing:0.05em;"><i class="fa-solid fa-weight-scale"></i> Antropometría</p>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem;margin-bottom:1.25rem;">
+          <div class="form-group" style="margin-bottom:0;"><label>Peso (kg) *</label><input type="number" id="consultWeight" step="0.01" class="form-control" placeholder="Ej. 8.5"></div>
+          <div class="form-group" style="margin-bottom:0;"><label>Estatura (cm) *</label><input type="number" id="consultHeight" step="0.1" class="form-control" placeholder="Ej. 71"></div>
+          <div class="form-group" style="margin-bottom:0;"><label>P. Cefálico (cm)</label><input type="number" id="consultHead" step="0.1" class="form-control" placeholder="Ej. 45"></div>
         </div>
+
+        <!-- Signos Vitales -->
+        <p style="font-weight:600;color:#7c3aed;margin-bottom:0.75rem;font-size:0.9rem;text-transform:uppercase;letter-spacing:0.05em;"><i class="fa-solid fa-heart-pulse"></i> Signos Vitales <span style="font-weight:400;font-size:0.8rem;color:var(--text-light);">(opcional)</span></p>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem;margin-bottom:0.75rem;">
+          <div class="form-group" style="margin-bottom:0;">
+            <label style="font-size:0.82rem;">FC <span style="color:var(--text-light)">(lpm)</span></label>
+            <input type="number" id="consultFC" class="form-control" min="30" max="300" placeholder="Ej. 120">
+          </div>
+          <div class="form-group" style="margin-bottom:0;">
+            <label style="font-size:0.82rem;">FR <span style="color:var(--text-light)">(rpm)</span></label>
+            <input type="number" id="consultFR" class="form-control" min="5" max="100" placeholder="Ej. 35">
+          </div>
+          <div class="form-group" style="margin-bottom:0;">
+            <label style="font-size:0.82rem;">Temperatura <span style="color:var(--text-light)">(°C)</span></label>
+            <input type="number" id="consultTemp" class="form-control" step="0.1" min="30" max="43" placeholder="Ej. 37.0">
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem;margin-bottom:1.25rem;">
+          <div class="form-group" style="margin-bottom:0;">
+            <label style="font-size:0.82rem;">SpO₂ <span style="color:var(--text-light)">(%)</span></label>
+            <input type="number" id="consultSpO2" class="form-control" min="50" max="100" placeholder="Ej. 98">
+          </div>
+          <div class="form-group" style="margin-bottom:0;">
+            <label style="font-size:0.82rem;">TA Sistólica <span style="color:var(--text-light)">(mmHg)</span></label>
+            <input type="number" id="consultTAS" class="form-control" min="40" max="200" placeholder="Ej. 90">
+          </div>
+          <div class="form-group" style="margin-bottom:0;">
+            <label style="font-size:0.82rem;">TA Diastólica <span style="color:var(--text-light)">(mmHg)</span></label>
+            <input type="number" id="consultTAD" class="form-control" min="20" max="130" placeholder="Ej. 60">
+          </div>
+        </div>
+
+        <!-- Tipo + Medicación -->
         <div class="form-group">
           <label>Tipo de consulta</label>
           <select id="consultType" class="form-control">
@@ -902,7 +976,7 @@ function renderModals() {
           <div id="medicationsList"></div>
           <button class="btn" style="background:transparent;color:var(--primary);border:1px dashed var(--primary);width:100%;margin-top:1rem;padding:0.5rem;" onclick="addMedicationField()"><i class="fa-solid fa-plus"></i> Añadir medicamento</button>
         </div>
-        <div class="form-group"><label>Notas Clínicas</label><textarea id="consultNotes" class="form-control" rows="4" placeholder="Observaciones, vacunas, etc..."></textarea></div>
+        <div class="form-group"><label>Notas Clínicas</label><textarea id="consultNotes" class="form-control" rows="3" placeholder="Observaciones, vacunas, etc..."></textarea></div>
         <button class="btn btn-primary" style="width:100%;margin-top:1rem;" onclick="saveConsult()">Guardar Registro</button>
       </div>
     </div>
@@ -1642,6 +1716,36 @@ window.editingConsultId    = null;
 window.editingConsultIndex = null;
 window.indexToDelete       = null;
 
+// Muestra un toast con alertas de signos vitales anormales
+function showVitalAlertToast(alerts) {
+  const existing = document.getElementById('vitalAlertToast');
+  if (existing) existing.remove();
+  const levelColor = alerts.some(a => a.level === 'danger') ? '#ef4444' : '#f59e0b';
+  const rows = alerts.map(a => `
+    <div style="display:flex;align-items:center;gap:0.5rem;padding:0.35rem 0;border-bottom:1px solid rgba(255,255,255,0.15);">
+      <i class="fa-solid ${a.level==='danger'?'fa-circle-exclamation':'fa-triangle-exclamation'}" style="font-size:0.85rem;min-width:14px;"></i>
+      <span><strong>${a.sign}:</strong> ${a.value} ${a.unit} — ${a.msg} <span style="opacity:0.75;font-size:0.8rem;">(normal: ${a.normal})</span></span>
+    </div>`).join('');
+  const toast = document.createElement('div');
+  toast.id = 'vitalAlertToast';
+  toast.innerHTML = `
+    <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem;">
+      <i class="fa-solid fa-heart-pulse" style="font-size:1.1rem;"></i>
+      <strong>Alerta de Signos Vitales</strong>
+      <button onclick="document.getElementById('vitalAlertToast').remove()" style="margin-left:auto;background:transparent;border:none;color:white;cursor:pointer;font-size:1rem;line-height:1;">✕</button>
+    </div>
+    ${rows}`;
+  Object.assign(toast.style, {
+    position:'fixed', bottom:'1.5rem', right:'1.5rem', zIndex:'9999',
+    background: levelColor, color:'white', padding:'1rem 1.25rem',
+    borderRadius:'12px', boxShadow:'0 8px 24px rgba(0,0,0,0.25)',
+    maxWidth:'420px', fontSize:'0.85rem', lineHeight:'1.4',
+    animation:'slideInRight 0.3s ease'
+  });
+  document.body.appendChild(toast);
+  setTimeout(() => toast?.remove(), 8000);
+}
+
 window.saveConsult = async function() {
   const weight = document.getElementById('consultWeight').value;
   const height = document.getElementById('consultHeight').value;
@@ -1650,6 +1754,13 @@ window.saveConsult = async function() {
   const type   = document.getElementById('consultType')?.value || 'Control de niño sano';
   const reqMed = document.getElementById('consultMedicationReq')?.value || 'No';
   const notes  = document.getElementById('consultNotes').value;
+  // Signos vitales
+  const fc   = document.getElementById('consultFC')?.value;
+  const fr   = document.getElementById('consultFR')?.value;
+  const temp = document.getElementById('consultTemp')?.value;
+  const spo2 = document.getElementById('consultSpO2')?.value;
+  const tas  = document.getElementById('consultTAS')?.value;
+  const tad  = document.getElementById('consultTAD')?.value;
   let meds = [];
   if (reqMed === 'Sí') {
     document.querySelectorAll('.medication-item').forEach(item => {
@@ -1659,12 +1770,22 @@ window.saveConsult = async function() {
       if (name) meds.push({ name, dose, freq });
     });
   }
-  const payload = { type, weight: parseFloat(weight), height: parseFloat(height), head_circ: head ? parseFloat(head) : null, notes: notes||'', medications: meds };
+  const payload = {
+    type, weight: parseFloat(weight), height: parseFloat(height),
+    head_circ: head ? parseFloat(head) : null, notes: notes||'', medications: meds,
+    heart_rate:   fc   ? parseInt(fc)     : null,
+    resp_rate:    fr   ? parseInt(fr)     : null,
+    temperature:  temp ? parseFloat(temp) : null,
+    spo2:         spo2 ? parseFloat(spo2) : null,
+    bp_systolic:  tas  ? parseInt(tas)    : null,
+    bp_diastolic: tad  ? parseInt(tad)    : null,
+  };
   try {
+    let resp;
     if (window.editingConsultId !== null) {
-      await API.put(`/patients/${currentPatientId}/consultations/${window.editingConsultId}`, payload);
+      resp = await API.put(`/patients/${currentPatientId}/consultations/${window.editingConsultId}`, payload);
     } else {
-      await API.post(`/patients/${currentPatientId}/consultations`, payload);
+      resp = await API.post(`/patients/${currentPatientId}/consultations`, payload);
     }
     consultations = (await API.get(`/patients/${currentPatientId}/consultations`)) || [];
     if (consultations.length > 0 && currentPatient) {
@@ -1675,6 +1796,10 @@ window.saveConsult = async function() {
     }
     closeModal('addConsultModal');
     renderApp();
+    // Mostrar alertas de signos vitales si las hay
+    if (resp?.vital_alerts?.length > 0) {
+      setTimeout(() => showVitalAlertToast(resp.vital_alerts), 300);
+    }
   } catch (e) { alert('Error: ' + e.message); }
 };
 
@@ -1695,6 +1820,13 @@ window.editConsult = function(idx) {
   const ml = document.getElementById('medicationsList');
   if (ml) { ml.innerHTML=''; meds.length > 0 ? meds.forEach(m => window.addMedicationField(m)) : window.addMedicationField(); }
   document.getElementById('consultNotes').value = h.notes||'';
+  // Signos vitales
+  const fcEl = document.getElementById('consultFC'); if(fcEl) fcEl.value = h.heart_rate||'';
+  const frEl = document.getElementById('consultFR'); if(frEl) frEl.value = h.resp_rate||'';
+  const tEl  = document.getElementById('consultTemp'); if(tEl) tEl.value = h.temperature||'';
+  const sEl  = document.getElementById('consultSpO2'); if(sEl) sEl.value = h.spo2||'';
+  const tsEl = document.getElementById('consultTAS'); if(tsEl) tsEl.value = h.bp_systolic||'';
+  const tdEl = document.getElementById('consultTAD'); if(tdEl) tdEl.value = h.bp_diastolic||'';
   openModal('addConsultModal');
 };
 
