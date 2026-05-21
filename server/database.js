@@ -138,7 +138,24 @@ function runMigrations() {
     try { db.prepare(sql).run(); } catch (e) {}
   }
 
-  console.log('âœ“ Migraciones ejecutadas');
+  // Fase E: módulo de vacunación NOM-031
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS vaccinations (
+      id             INTEGER PRIMARY KEY AUTOINCREMENT,
+      patient_id     INTEGER NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+      vaccine        TEXT NOT NULL,
+      dose           TEXT NOT NULL,
+      target_months  INTEGER NOT NULL,
+      scheduled_date TEXT,
+      applied_at     TEXT,
+      lot            TEXT,
+      notes          TEXT,
+      applied_by     INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at     TEXT DEFAULT (datetime('now'))
+    );
+  `);
+
+  console.log('âœ” Migraciones ejecutadas');
 }
 
 function initDB() {

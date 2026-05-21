@@ -26,6 +26,7 @@ let patients        = [];
 let pediatricians   = [];
 let currentPatient  = null;
 let consultations   = [];
+let patientVaccinations = [];
 let todayAppointments = [];
 let currentPatientId  = null;
 let currentView     = 'login';
@@ -65,8 +66,9 @@ async function refreshData() {
         currentPatient  = p;
         patients        = [p];
         currentPatientId = p.id;
-        consultations   = (await API.get(`/patients/${p.id}/consultations`)) || [];
-        tutorAppointments = (await API.get('/appointments')) || [];
+        consultations       = (await API.get(`/patients/${p.id}/consultations`)) || [];
+        patientVaccinations = (await API.get(`/patients/${p.id}/vaccinations`)) || [];
+        tutorAppointments   = (await API.get('/appointments')) || [];
       }
     } else {
       patients = (await API.get('/patients')) || [];
@@ -539,6 +541,8 @@ function renderParentProfile() {
         <div class="timeline">${historyHtml}</div>
       </div>
 
+      ${renderVaccineSection()}
+
       ${(p.onboarding_data && Object.keys(p.onboarding_data).length > 0) || (p.family_history && p.family_history.length > 0) || p.delivery_type ? `
       <div class="history-section" style="margin-top:2rem;">
         <h2 style="margin-bottom:2rem;font-size:1.8rem;border-bottom:2px solid var(--primary-light);padding-bottom:0.5rem;">Expediente de Ingreso</h2>
@@ -587,6 +591,162 @@ function renderParentProfile() {
     </div>
   `;
 }
+
+// ── Vaccine Section ────────────────────────────────────────────────────────
+function renderVaccineSection() {
+  if (!patientVaccinations.length) {
+    return `<div class="history-section" style="margin-top:2rem;">
+      <h2 style="margin-bottom:1rem;">Esquema de Vacunación NOM-031</h2>
+      <p style="color:var(--text-light);">Cargando esquema de vacunación…</p>
+    </div>`;
+  }
+
+  // Group by NOM group
+  const groups = {};
+  for (const v of patientVaccinations) {
+    if (!groups[v.group]) groups[v.group] = [];
+    groups[v.group].push(v);
+  }
+
+  const statusCfg = {
+    aplicada:  { label: 'Aplicada',  bg: '#dcfce7', color: '#16a34a', icon: 'fa-circle-check' },
+    proxima:   { label: 'Próxima',   bg: '#fef9c3', color: '#ca8a04', icon: 'fa-bell'         },
+    vencida:   { label: 'Vencida',   bg: '#fee2e2', color: '#dc2626', icon: 'fa-triangle-exclamation' },
+    pendiente: { label: 'Pendiente', bg: '#f1f5f9', color: '#64748b', icon: 'fa-clock'        },
+  };
+
+  const vaccineIcons = {
+    'BCG':              'fa-shield-virus',
+    'Hepatitis B':      'fa-syringe',
+    'Pentavalente':     'fa-shield-halved',
+    'Rotavirus':        'fa-biohazard',
+    'Neumocócica 13v':  'fa-lungs',
+    'Influenza':        'fa-wind',
+    'Triple Viral SRP': 'fa-viruses',
+    'Varicela':         'fa-bacteria',
+    'DPT':              'fa-shield',
+    'VPH':              'fa-ribbon',
+  };
+
+  // Summary counts
+  const applied  = patientVaccinations.filter(v => v.status === 'aplicada').length;
+  const overdue  = patientVaccinations.filter(v => v.status === 'vencida').length;
+  const upcoming = patientVaccinations.filter(v => v.status === 'proxima').length;
+  const total    = patientVaccinations.length;
+  const pct      = Math.round((applied / total) * 100);
+
+  const groupsHtml = Object.entries(groups).map(([grp, items]) => {
+    const allApplied = items.every(v => v.status === 'aplicada');
+    const hasOverdue = items.some(v => v.status === 'vencida');
+    const grpColor   = allApplied ? '#16a34a' : hasOverdue ? '#dc2626' : '#64748b';
+
+    const cards = items.map(v => {
+      const cfg   = statusCfg[v.status] || statusCfg.pendiente;
+      const vIcon = vaccineIcons[v.vaccine] || 'fa-syringe';
+      const schedLabel = v.scheduled_date
+        ? new Date(v.scheduled_date + 'T12:00:00').toLocaleDateString('es-MX', { day:'numeric', month:'short', year:'numeric' })
+        : '—';
+
+      const applyBtn = currentUser.role !== 'tutor' && v.status !== 'aplicada'
+        ? `<button class="btn" style="margin-top:0.6rem;padding:0.3rem 0.8rem;font-size:0.78rem;background:var(--primary);color:white;border-radius:6px;box-shadow:none;" onclick="openApplyVaccineModal(${v.id},'${v.vaccine}','${v.dose}')"><i class="fa-solid fa-syringe"></i> Aplicar</button>`
+        : '';
+      const unapplyBtn = currentUser.role !== 'tutor' && v.status === 'aplicada'
+        ? `<button class="btn" style="margin-top:0.4rem;padding:0.2rem 0.6rem;font-size:0.72rem;background:transparent;color:#64748b;box-shadow:none;border:1px solid #e2e8f0;border-radius:5px;" onclick="unapplyVaccine(${v.id})" title="Deshacer aplicación"><i class="fa-solid fa-rotate-left"></i></button>`
+        : '';
+
+      const appliedInfo = v.applied_at ? `
+        <div style="margin-top:0.4rem;font-size:0.75rem;color:#16a34a;">
+          <i class="fa-solid fa-calendar-check"></i>
+          ${new Date(v.applied_at + 'T12:00:00').toLocaleDateString('es-MX',{day:'numeric',month:'short',year:'numeric'})}
+          ${v.lot ? `<span style="color:#64748b;"> · Lote: ${v.lot}</span>` : ''}
+          ${v.applied_by_name ? `<span style="color:#64748b;"> · ${v.applied_by_name}</span>` : ''}
+        </div>` : '';
+
+      return `
+      <div style="background:white;border-radius:12px;padding:0.9rem 1rem;box-shadow:0 1px 4px rgba(0,0,0,0.07);border-left:3px solid ${cfg.color};min-width:180px;flex:1 1 180px;max-width:240px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:0.4rem;margin-bottom:0.3rem;">
+          <div style="display:flex;align-items:center;gap:0.5rem;">
+            <i class="fa-solid ${vIcon}" style="color:var(--primary);font-size:0.9rem;"></i>
+            <span style="font-weight:600;font-size:0.85rem;">${v.vaccine}</span>
+          </div>
+          <span style="font-size:0.7rem;background:${cfg.bg};color:${cfg.color};padding:0.15rem 0.5rem;border-radius:20px;white-space:nowrap;"><i class="fa-solid ${cfg.icon}" style="font-size:0.65rem;"></i> ${cfg.label}</span>
+        </div>
+        <div style="font-size:0.78rem;color:var(--text-light);">Dosis: <strong style="color:var(--text-dark);">${v.dose}</strong></div>
+        <div style="font-size:0.75rem;color:var(--text-light);margin-top:0.2rem;"><i class="fa-regular fa-calendar" style="margin-right:0.2rem;"></i>${schedLabel}</div>
+        ${appliedInfo}
+        <div style="display:flex;gap:0.4rem;flex-wrap:wrap;align-items:center;">${applyBtn}${unapplyBtn}</div>
+      </div>`;
+    }).join('');
+
+    return `
+    <div style="margin-bottom:1.2rem;">
+      <div style="font-size:0.78rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:${grpColor};margin-bottom:0.5rem;display:flex;align-items:center;gap:0.4rem;">
+        <i class="fa-solid fa-circle-dot" style="font-size:0.55rem;"></i> ${grp}
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:0.6rem;">${cards}</div>
+    </div>`;
+  }).join('');
+
+  return `
+  <div class="history-section" style="margin-top:2rem;">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.5rem;margin-bottom:1.2rem;">
+      <h2 style="margin:0;">Esquema de Vacunación NOM-031</h2>
+      <div style="display:flex;gap:0.6rem;flex-wrap:wrap;font-size:0.82rem;">
+        <span style="background:#dcfce7;color:#16a34a;padding:0.25rem 0.7rem;border-radius:20px;font-weight:500;"><i class="fa-solid fa-circle-check"></i> ${applied} aplicadas</span>
+        ${overdue  ? `<span style="background:#fee2e2;color:#dc2626;padding:0.25rem 0.7rem;border-radius:20px;font-weight:500;"><i class="fa-solid fa-triangle-exclamation"></i> ${overdue} vencidas</span>` : ''}
+        ${upcoming ? `<span style="background:#fef9c3;color:#ca8a04;padding:0.25rem 0.7rem;border-radius:20px;font-weight:500;"><i class="fa-solid fa-bell"></i> ${upcoming} próximas</span>` : ''}
+      </div>
+    </div>
+    <div style="background:white;border-radius:10px;padding:0.7rem 1rem;margin-bottom:1.2rem;box-shadow:0 1px 4px rgba(0,0,0,0.06);">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.4rem;">
+        <span style="font-size:0.82rem;color:var(--text-light);">Progreso de vacunación</span>
+        <span style="font-size:0.82rem;font-weight:600;color:var(--primary);">${applied}/${total} (${pct}%)</span>
+      </div>
+      <div style="background:#e2e8f0;border-radius:20px;height:8px;overflow:hidden;">
+        <div style="background:linear-gradient(90deg,var(--primary),var(--secondary));height:100%;width:${pct}%;border-radius:20px;transition:width 0.5s;"></div>
+      </div>
+    </div>
+    ${groupsHtml}
+  </div>`;
+}
+
+// Apply vaccine modal opener
+window.openApplyVaccineModal = function(vaccId, vaccineName, dose) {
+  window._applyVaccId = vaccId;
+  document.getElementById('applyVaccTitle').textContent   = `${vaccineName} — ${dose}`;
+  document.getElementById('applyVaccDate').value          = new Date().toISOString().slice(0,10);
+  document.getElementById('applyVaccLot').value           = '';
+  document.getElementById('applyVaccNotes').value         = '';
+  document.getElementById('applyVaccError').style.display = 'none';
+  openModal('applyVaccineModal');
+};
+
+window.confirmApplyVaccine = async function() {
+  const id    = window._applyVaccId;
+  const date  = document.getElementById('applyVaccDate').value;
+  const lot   = document.getElementById('applyVaccLot').value.trim();
+  const notes = document.getElementById('applyVaccNotes').value.trim();
+  const errEl = document.getElementById('applyVaccError');
+  if (!date) { errEl.textContent = 'La fecha es requerida'; errEl.style.display = 'block'; return; }
+  try {
+    const pid = currentPatientId || currentPatient?.id;
+    await API.post(`/patients/${pid}/vaccinations/${id}/apply`, { applied_at: date, lot, notes });
+    closeModal('applyVaccineModal');
+    // Refresh vaccinations
+    patientVaccinations = (await API.get(`/patients/${pid}/vaccinations`)) || [];
+    renderApp();
+  } catch (e) { errEl.textContent = e.message; errEl.style.display = 'block'; }
+};
+
+window.unapplyVaccine = async function(id) {
+  if (!confirm('¿Deshacer la aplicación de esta vacuna?')) return;
+  try {
+    const pid = currentPatientId || currentPatient?.id;
+    await API.put(`/patients/${pid}/vaccinations/${id}/unapply`, {});
+    patientVaccinations = (await API.get(`/patients/${pid}/vaccinations`)) || [];
+    renderApp();
+  } catch (e) { alert(e.message); }
+};
 
 function renderOnboardingSuccess() {
   const data = window.successData || {};
@@ -1055,6 +1215,36 @@ function renderModals() {
         <div class="modal-header"><h2>Cambiar Contraseña del Tutor</h2><button class="close-btn" onclick="closeModal('resetPasswordModal')"><i class="fa-solid fa-xmark"></i></button></div>
         <div class="form-group"><label>Nueva Contraseña</label><input type="text" id="resetPasswordInput" class="form-control" placeholder="Mín. 6 caracteres"></div>
         <button class="btn btn-primary" style="width:100%;margin-top:1rem;" onclick="confirmResetPassword()">Actualizar Contraseña</button>
+      </div>
+    </div>
+
+    <!-- Apply Vaccine Modal -->
+    <div class="modal-overlay" id="applyVaccineModal" onclick="if(event.target===this)closeModal('applyVaccineModal')">
+      <div class="modal-content" style="max-width:420px;">
+        <div class="modal-header">
+          <h2><i class="fa-solid fa-syringe" style="color:var(--primary);margin-right:0.5rem;"></i>Aplicar Vacuna</h2>
+          <button class="close-btn" onclick="closeModal('applyVaccineModal')"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <p style="color:var(--primary);font-weight:600;margin-bottom:1rem;" id="applyVaccTitle"></p>
+        <div id="applyVaccError" style="display:none;background:#fee2e2;color:#dc2626;padding:0.6rem 0.9rem;border-radius:8px;margin-bottom:0.8rem;font-size:0.85rem;"></div>
+        <div class="form-group">
+          <label>Fecha de Aplicación *</label>
+          <input type="date" id="applyVaccDate" class="form-control">
+        </div>
+        <div class="form-group">
+          <label>Número de Lote</label>
+          <input type="text" id="applyVaccLot" class="form-control" placeholder="Ej. A12345B">
+        </div>
+        <div class="form-group">
+          <label>Notas</label>
+          <input type="text" id="applyVaccNotes" class="form-control" placeholder="Observaciones opcionales">
+        </div>
+        <div style="display:flex;gap:0.75rem;justify-content:flex-end;margin-top:1.25rem;">
+          <button class="btn btn-secondary" onclick="closeModal('applyVaccineModal')">Cancelar</button>
+          <button class="btn btn-primary" onclick="confirmApplyVaccine()">
+            <i class="fa-solid fa-check"></i> Confirmar
+          </button>
+        </div>
       </div>
     </div>
   `;
@@ -1748,13 +1938,19 @@ window.navigate = function(view) {
 };
 
 window.viewPatient = async function(id) {
-  currentPatientId = id;
-  currentPatient   = patients.find(p => p.id === id) || null;
-  consultations    = [];
-  currentView      = 'parent-profile';
+  currentPatientId    = id;
+  currentPatient      = patients.find(p => p.id === id) || null;
+  consultations       = [];
+  patientVaccinations = [];
+  currentView         = 'parent-profile';
   renderApp();
   try {
-    consultations = (await API.get(`/patients/${id}/consultations`)) || [];
+    const [consults, vaccines] = await Promise.all([
+      API.get(`/patients/${id}/consultations`),
+      API.get(`/patients/${id}/vaccinations`),
+    ]);
+    consultations       = consults  || [];
+    patientVaccinations = vaccines  || [];
     renderApp();
   } catch (e) { console.error('viewPatient:', e.message); }
 };

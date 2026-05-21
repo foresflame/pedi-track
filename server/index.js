@@ -16,6 +16,7 @@ app.use('/api/auth',          require('./routes/auth'));
 app.use('/api/users',         require('./routes/users'));
 app.use('/api/patients',      require('./routes/patients'));
 app.use('/api/patients/:patientId/consultations', require('./routes/consultations'));
+app.use('/api/patients/:patientId/vaccinations',  require('./routes/vaccinations'));
 app.use('/api/appointments',  require('./routes/appointments'));
 app.use('/api/email',         require('./routes/email'));
 
