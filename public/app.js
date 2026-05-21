@@ -477,8 +477,23 @@ function renderParentProfile() {
       </div>
 
       <div class="charts-section">
-        <h2>Curva de Crecimiento (Peso)</h2>
-        <div class="chart-container"><canvas id="growthChart"></canvas></div>
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.75rem;margin-bottom:1rem;">
+          <h2 style="margin:0;">Curvas de Crecimiento OMS 2006</h2>
+          <div style="display:flex;gap:0.4rem;">
+            <button id="chartTabPeso" class="btn" style="padding:0.35rem 1rem;font-size:0.85rem;background:var(--primary);color:white;" onclick="switchGrowthTab('peso')"><i class="fa-solid fa-weight-scale"></i> Peso</button>
+            <button id="chartTabTalla" class="btn btn-secondary" style="padding:0.35rem 1rem;font-size:0.85rem;" onclick="switchGrowthTab('talla')"><i class="fa-solid fa-ruler-vertical"></i> Talla</button>
+          </div>
+        </div>
+        <div id="growthChartWrap" style="position:relative;">
+          <div class="chart-container"><canvas id="growthChart"></canvas></div>
+          <div id="growthZscoreBox" style="display:none;position:absolute;top:0.5rem;right:0.5rem;background:white;border:1px solid #E2E8F0;border-radius:10px;padding:0.5rem 0.75rem;font-size:0.8rem;box-shadow:0 2px 8px rgba(0,0,0,0.08);min-width:140px;"></div>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:0.75rem;margin-top:0.75rem;font-size:0.78rem;color:var(--text-light);">
+          <span style="display:flex;align-items:center;gap:0.35rem;"><span style="width:28px;height:8px;background:rgba(74,222,128,0.35);border-radius:3px;display:inline-block;"></span> P3–P97</span>
+          <span style="display:flex;align-items:center;gap:0.35rem;"><span style="width:28px;height:8px;background:rgba(34,197,94,0.45);border-radius:3px;display:inline-block;"></span> P15–P85</span>
+          <span style="display:flex;align-items:center;gap:0.35rem;"><span style="width:28px;height:3px;background:#16a34a;border-radius:3px;display:inline-block;border-top:2px dashed #16a34a;"></span> P50 (mediana)</span>
+          <span style="display:flex;align-items:center;gap:0.35rem;"><span style="width:10px;height:10px;background:#4A90E2;border-radius:50%;display:inline-block;"></span> Paciente</span>
+        </div>
       </div>
 
       ${currentUser.role === 'tutor' ? `
@@ -1551,24 +1566,174 @@ function categorizeOnboardingData(data) {
   return cats;
 }
 
+// ── WHO 2006 Growth Reference Data ────────────────────────────────────────────
+// Formato: [P3, P15, P50, P85, P97] a cada edad (meses)
+const WHO_AGES_W = [0,1,2,3,4,5,6,7,8,9,10,11,12,15,18,21,24,30,36,42,48,54,60];
+const WHO_W = {
+  F: [[2.4,2.8,3.2,3.7,4.2],[3.0,3.4,4.0,4.6,5.2],[3.8,4.3,5.1,5.8,6.5],[4.5,5.1,5.8,6.6,7.4],[5.0,5.6,6.4,7.3,8.2],[5.4,6.1,6.9,7.8,8.8],[5.7,6.4,7.3,8.3,9.4],[6.0,6.7,7.6,8.7,9.8],[6.3,7.0,7.9,9.0,10.2],[6.6,7.4,8.4,9.6,10.8],[6.9,7.7,8.7,9.9,11.2],[7.2,8.1,9.2,10.5,11.9],[7.5,8.4,9.6,10.9,12.4],[8.0,9.0,10.3,11.8,13.4],[8.4,9.5,10.9,12.5,14.3],[8.8,10.0,11.4,13.1,15.0],[9.3,10.5,12.0,13.8,15.8],[10.1,11.4,13.0,14.9,17.1],[10.8,12.1,13.9,15.9,18.4],[11.4,12.8,14.7,16.9,19.6],[12.0,13.5,15.5,17.9,20.8],[12.6,14.2,16.3,18.8,21.9],[13.2,14.9,17.2,19.8,23.2]],
+  M: [[2.5,2.9,3.3,3.9,4.4],[3.4,3.9,4.5,5.1,5.7],[4.3,5.0,5.6,6.4,7.1],[5.0,5.7,6.4,7.2,8.0],[5.6,6.3,7.0,7.9,8.8],[6.0,6.7,7.5,8.4,9.3],[6.4,7.1,7.9,8.9,9.9],[6.7,7.4,8.3,9.3,10.3],[7.0,7.7,8.6,9.7,10.8],[7.1,8.0,9.0,10.2,11.4],[7.5,8.4,9.4,10.6,11.8],[7.8,8.7,9.8,11.0,12.3],[8.1,9.1,10.2,11.5,12.9],[8.9,9.9,11.2,12.6,14.1],[9.4,10.5,11.8,13.3,14.9],[9.8,11.0,12.4,14.0,15.7],[10.2,11.4,12.9,14.6,16.4],[10.9,12.2,13.8,15.6,17.5],[11.6,13.0,14.7,16.6,18.8],[12.1,13.6,15.5,17.5,19.9],[12.7,14.2,16.2,18.3,20.9],[13.3,14.9,16.9,19.2,22.0],[13.9,15.5,17.7,20.1,23.1]]
+};
+const WHO_AGES_H = [0,1,2,3,4,5,6,7,8,9,10,11,12,15,18,21,24,30,36,42,48,54,60];
+const WHO_H = {
+  F: [[45.6,47.2,49.1,50.9,52.9],[50.2,52.0,53.7,55.6,57.4],[53.2,55.1,57.1,59.0,61.0],[56.0,57.7,59.8,61.9,63.9],[58.0,59.9,62.1,64.3,66.4],[59.9,61.8,64.0,66.2,68.5],[61.5,63.5,65.7,68.0,70.3],[62.9,65.0,67.3,69.7,72.0],[64.3,66.5,68.7,71.1,73.6],[65.3,67.4,70.1,72.6,75.0],[66.5,68.7,71.5,74.0,76.7],[67.7,69.9,72.8,75.5,78.2],[68.9,71.2,74.0,76.8,79.7],[72.0,74.3,77.5,80.7,84.0],[74.9,77.3,80.7,84.2,87.7],[77.5,80.1,83.7,87.3,91.1],[79.3,81.7,85.5,89.4,93.1],[83.6,86.2,90.2,94.1,98.4],[88.7,91.4,95.1,98.7,102.7],[93.0,95.8,99.7,103.7,107.8],[96.4,99.4,103.3,107.2,111.3],[100.0,103.1,107.2,111.4,115.7],[103.7,106.9,111.2,115.5,119.9]],
+  M: [[46.1,47.8,49.9,51.8,53.7],[50.8,52.8,54.7,56.6,58.5],[54.4,56.4,58.4,60.4,62.4],[57.3,59.4,61.4,63.5,65.5],[59.7,61.8,63.9,65.9,68.0],[61.7,63.8,65.9,68.0,70.1],[63.3,65.5,67.6,69.8,71.9],[64.8,67.0,69.2,71.4,73.7],[66.2,68.4,70.7,73.0,75.4],[68.0,70.1,72.3,74.5,76.8],[69.2,71.4,73.7,76.0,78.3],[70.4,72.7,75.0,77.4,79.8],[71.7,73.9,76.1,78.3,80.5],[75.0,77.3,79.7,82.3,84.9],[77.5,79.9,82.3,84.8,87.5],[79.6,82.0,84.7,87.5,90.5],[82.5,85.1,88.0,90.9,93.9],[87.4,90.1,93.0,96.1,99.2],[89.7,92.4,95.5,98.7,101.9],[94.4,97.2,100.4,103.7,107.0],[97.6,100.6,103.9,107.1,110.4],[101.0,104.1,107.6,111.1,114.6],[103.1,106.3,110.0,113.6,117.3]]
+};
+
+// Interpola linealmente en la tabla WHO para una edad dada en meses
+function whoInterp(table, ageMonths) {
+  const ages = table === WHO_W.F || table === WHO_W.M ? WHO_AGES_W : WHO_AGES_H;
+  if (ageMonths <= ages[0]) return table[0];
+  if (ageMonths >= ages[ages.length-1]) return table[table.length-1];
+  let i = ages.findIndex(a => a > ageMonths) - 1;
+  const t = (ageMonths - ages[i]) / (ages[i+1] - ages[i]);
+  return table[i].map((v,j) => +(v + t*(table[i+1][j]-v)).toFixed(2));
+}
+
+// Estima percentil dada una medición y los [P3,P15,P50,P85,P97] interpolados
+function estimatePercentile(val, pts) {
+  const [p3,p15,p50,p85,p97] = pts;
+  if (val <= p3)  return `↓P3 (muy bajo)`;
+  if (val >= p97) return `↑P97 (muy alto)`;
+  const segs = [[p3,p15,3,15],[p15,p50,15,50],[p50,p85,50,85],[p85,p97,85,97]];
+  for (const [lo,hi,plo,phi] of segs) {
+    if (val >= lo && val <= hi) {
+      const p = Math.round(plo + (val-lo)/(hi-lo)*(phi-plo));
+      return `P${p}`;
+    }
+  }
+  return '–';
+}
+
+// Z-score simplificado (basado en interpolación entre percentiles WHO)
+function estimateZscore(val, pts) {
+  const [p3,p15,p50,p85,p97] = pts;
+  // Mapeo aproximado: P3≈-2, P15≈-1, P50=0, P85≈+1, P97≈+2
+  const zMap = [[p3,-2],[p15,-1],[p50,0],[p85,1],[p97,2]];
+  for (let i=0; i<zMap.length-1; i++) {
+    const [v0,z0]=zMap[i], [v1,z1]=zMap[i+1];
+    if (val >= v0 && val <= v1) return +((z0 + (val-v0)/(v1-v0)*(z1-z0)).toFixed(2));
+  }
+  if (val < p3) return +((-2 - (p3-val)/(p15-p3)).toFixed(2));
+  return +((2 + (val-p97)/(p97-p85)).toFixed(2));
+}
+
+let _growthChartInst = null;
+let _growthChartTab  = 'peso'; // 'peso' | 'talla'
+
+window.switchGrowthTab = function(tab) {
+  _growthChartTab = tab;
+  document.getElementById('chartTabPeso')?.setAttribute('style','padding:0.35rem 1rem;font-size:0.85rem;background:'+(tab==='peso'?'var(--primary);color:white':'var(--primary-light);color:var(--primary)')+';');
+  document.getElementById('chartTabTalla')?.setAttribute('style','padding:0.35rem 1rem;font-size:0.85rem;background:'+(tab==='talla'?'var(--primary);color:white':'var(--primary-light);color:var(--primary)')+';');
+  if (_growthChartInst) { _growthChartInst.destroy(); _growthChartInst = null; }
+  initChart();
+};
+
 function initChart() {
-  const ctx = document.getElementById('growthChart');
-  if (!ctx || !currentPatient) return;
-  const p  = currentPatient;
-  const od = p.onboarding_data;
-  let labels = [], weights = [];
-  const bw = od ? (parseFloat(od['Peso'])||0) : 0;
-  const bd = p.birth_date || (od && od['Fecha de nacimiento']);
-  if (bw > 0) { labels.push(bd || 'Nacimiento'); weights.push(bw); }
-  else if (p.weight > 0 && consultations.length === 0) { labels.push('Registro'); weights.push(parseFloat(p.weight)); }
-  const history = [...consultations].reverse();
-  labels  = labels.concat(history.map(h => h.date));
-  weights = weights.concat(history.map(h => parseFloat(h.weight)));
-  if (!weights.length) return;
-  new Chart(ctx, {
+  const canvas = document.getElementById('growthChart');
+  if (!canvas || !currentPatient) return;
+  if (_growthChartInst) { _growthChartInst.destroy(); _growthChartInst = null; }
+
+  const p        = currentPatient;
+  const sex      = p.sex === 'Femenino' ? 'F' : 'M';
+  const isWeight = _growthChartTab === 'peso';
+  const refTable = isWeight ? WHO_W[sex] : WHO_H[sex];
+  const unit     = isWeight ? 'kg' : 'cm';
+  const label    = isWeight ? 'Peso (kg)' : 'Talla (cm)';
+
+  // ── Datos del paciente ─────────────────────────────────────────────
+  const birthDate = p.birth_date;
+  const dataPoints = []; // { age, val }
+
+  if (birthDate) {
+    const birth = new Date(birthDate + 'T12:00:00');
+    const history = [...consultations].reverse();
+    history.forEach(h => {
+      const val = isWeight ? parseFloat(h.weight) : parseFloat(h.height);
+      if (!val || !h.date) return;
+      // Intentar parsear fecha — puede ser '21 de mayo de 2026' o 'YYYY-MM-DD'
+      let consulDate = new Date(h.date + 'T12:00:00');
+      if (isNaN(consulDate.getTime())) {
+        // formato 'D de Mes de YYYY'
+        const months = {enero:0,febrero:1,marzo:2,abril:3,mayo:4,junio:5,julio:6,agosto:7,septiembre:8,octubre:9,noviembre:10,diciembre:11};
+        const m = h.date.match(/(\d+)\s+de\s+(\w+)\s+de\s+(\d{4})/i);
+        if (m) consulDate = new Date(parseInt(m[3]), months[m[2].toLowerCase()], parseInt(m[1]));
+      }
+      if (isNaN(consulDate.getTime())) return;
+      const ageM = (consulDate - birth) / (30.4375 * 86400000);
+      if (ageM >= 0 && ageM <= 72) dataPoints.push({ age: ageM, val, date: h.date });
+    });
+  }
+
+  // ── Generar curvas de referencia OMS ─────────────────────────────
+  const ageRange = Array.from({length: 61}, (_,i) => i); // 0-60 meses
+  const makeRef = idx => ageRange.map(a => whoInterp(refTable, a)[idx]);
+  const [r3,r15,r50,r85,r97] = [0,1,2,3,4].map(i => makeRef(i));
+
+  // ── Z-scores para la leyenda ──────────────────────────────────────
+  const zsBox = document.getElementById('growthZscoreBox');
+  if (zsBox && dataPoints.length > 0 && birthDate) {
+    const last = dataPoints[dataPoints.length - 1];
+    const pts  = whoInterp(refTable, last.age);
+    const pct  = estimatePercentile(last.val, pts);
+    const zsc  = estimateZscore(last.val, pts);
+    const zColor = Math.abs(zsc) > 2 ? '#dc2626' : Math.abs(zsc) > 1 ? '#d97706' : '#16a34a';
+    zsBox.style.display = 'block';
+    zsBox.innerHTML = `<div style="font-weight:600;margin-bottom:0.3rem;color:var(--text-dark);">Última medición</div>
+      <div>${label}: <strong>${last.val} ${unit}</strong></div>
+      <div>Percentil: <strong style="color:${zColor};">${pct}</strong></div>
+      <div>Z-score: <strong style="color:${zColor};">${zsc > 0 ? '+' : ''}${zsc}</strong></div>`;
+  } else if (zsBox) { zsBox.style.display = 'none'; }
+
+  // ── Chart.js ──────────────────────────────────────────────────────
+  const patientData = dataPoints.map(d => ({ x: +d.age.toFixed(2), y: d.val }));
+
+  _growthChartInst = new Chart(canvas, {
     type: 'line',
-    data: { labels, datasets: [{ label:'Peso (kg)', data:weights, borderColor:'#4A90E2', backgroundColor:'rgba(74,144,226,0.1)', borderWidth:3, pointBackgroundColor:'#fff', pointBorderColor:'#4A90E2', pointBorderWidth:2, pointRadius:5, fill:true, tension:0.4 }] },
-    options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{ y:{beginAtZero:false,grid:{borderDash:[5,5],color:'#E2E8F0'}}, x:{grid:{display:false}} } }
+    data: {
+      labels: ageRange,
+      datasets: [
+        // P3–P97 outer band (fill between)
+        { label:'P97', data:r97, borderColor:'rgba(74,222,128,0.3)', borderWidth:1, pointRadius:0, fill:false, tension:0.4 },
+        { label:'P85', data:r85, borderColor:'rgba(34,197,94,0.0)',  borderWidth:0, pointRadius:0, fill:'-1', backgroundColor:'rgba(74,222,128,0.15)', tension:0.4 },
+        { label:'P15', data:r15, borderColor:'rgba(34,197,94,0.0)',  borderWidth:0, pointRadius:0, fill:'+1', backgroundColor:'rgba(34,197,94,0.25)', tension:0.4 },
+        { label:'P50', data:r50, borderColor:'#16a34a',              borderWidth:1.5, pointRadius:0, fill:false, borderDash:[5,3], tension:0.4 },
+        { label:'P3',  data:r3,  borderColor:'rgba(74,222,128,0.3)', borderWidth:1, pointRadius:0, fill:'-3', backgroundColor:'rgba(74,222,128,0.15)', tension:0.4 },
+        // Datos del paciente
+        {
+          label, data: patientData, borderColor:'#4A90E2', backgroundColor:'#fff',
+          borderWidth:2.5, pointBackgroundColor:'#4A90E2', pointBorderColor:'#fff',
+          pointBorderWidth:2, pointRadius:5, fill:false, tension:0.4,
+          parsing: false
+        }
+      ]
+    },
+    options: {
+      responsive:true, maintainAspectRatio:false,
+      plugins:{
+        legend:{ display:false },
+        tooltip:{
+          filter: item => item.datasetIndex === 5,
+          callbacks:{
+            title: items => {
+              const dp = dataPoints[items[0].dataIndex];
+              if (!dp) return '';
+              const m = Math.floor(dp.age), d = Math.round((dp.age-m)*30.4);
+              return `${m}m${d>0?` ${d}d`:''} — ${dp.date}`;
+            },
+            label: item => {
+              const dp = dataPoints[item.dataIndex];
+              if (!dp || !birthDate) return `${item.parsed.y} ${unit}`;
+              const pts = whoInterp(refTable, dp.age);
+              return [`${label}: ${item.parsed.y} ${unit}`, `Percentil: ${estimatePercentile(dp.val,pts)}`, `Z-score: ${(() => { const z=estimateZscore(dp.val,pts); return (z>0?'+':'')+z; })()}`];
+            }
+          }
+        }
+      },
+      scales:{
+        x:{ type:'linear', title:{ display:true, text:'Edad (meses)', color:'#94a3b8', font:{size:11} }, min:0, max:60, grid:{ color:'#F1F5F9' }, ticks:{ color:'#94a3b8', stepSize:6 } },
+        y:{ title:{ display:true, text:unit, color:'#94a3b8', font:{size:11} }, grid:{ color:'#F1F5F9' }, ticks:{ color:'#94a3b8' } }
+      }
+    }
   });
 }
 
