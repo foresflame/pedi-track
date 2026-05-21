@@ -1,4 +1,4 @@
-require('dotenv').config();
+﻿require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
@@ -19,7 +19,7 @@ app.use('/api/patients/:patientId/consultations', require('./routes/consultation
 app.use('/api/appointments',  require('./routes/appointments'));
 app.use('/api/email',         require('./routes/email'));
 
-// SPA fallback — serve index.html for any non-API route
+// SPA fallback â€” serve index.html for any non-API route
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
 });
@@ -27,7 +27,7 @@ app.get('*', (req, res) => {
 initDB();
 
 app.listen(PORT, () => {
-  console.log(`\n🏥 PediTrack server corriendo en http://localhost:${PORT}`);
+  console.log(`\nðŸ¥ PediTrack server corriendo en http://localhost:${PORT}`);
   console.log(`   Credenciales de prueba:`);
   console.log(`   admin@peditrack.com / Admin2024!`);
   console.log(`   doc@peditrack.com   / Doc2024!`);

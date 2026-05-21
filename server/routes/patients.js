@@ -55,12 +55,28 @@ router.get('/:id', (req, res) => {
     return res.status(403).json({ error: 'Acceso denegado' });
   }
 
-  res.json(parsePatient(p));
+  const parsed = parsePatient(p);
+  // Incluir antecedentes heredofamiliares
+  parsed.family_history = db.prepare(
+    'SELECT id, condition, relationship, notes FROM family_history WHERE patient_id = ? ORDER BY id'
+  ).all(id);
+
+  res.json(parsed);
 });
 
 // POST /api/patients — crear paciente (admin, pediatra)
 router.post('/', requireRole('admin', 'pediatra'), (req, res) => {
-  const { name, birth_date, sex, weight, height, onboarding_data, tutor_email, tutor_name } = req.body;
+  const {
+    name, birth_date, sex, weight, height, onboarding_data, tutor_email, tutor_name,
+    family_history,
+    // Fase A: campos estructurados
+    birth_state, birth_city, parents_education,
+    gestational_age, gestational_type, delivery_type,
+    birth_weight, birth_height, birth_head_circ,
+    apgar_1, apgar_5, silverman_score,
+    nicu_stay, nicu_days, breastfed, breastfed_months,
+    torch_exposure, neonatal_screening, maternal_age, prenatal_visits,
+  } = req.body;
   if (!name) return res.status(400).json({ error: 'El nombre del paciente es requerido' });
 
   const doctor_id = req.user.role === 'pediatra' ? req.user.id : (req.body.doctor_id || null);
@@ -95,15 +111,29 @@ router.post('/', requireRole('admin', 'pediatra'), (req, res) => {
 
   if (onboarding_data) {
     const od = typeof onboarding_data === 'string' ? JSON.parse(onboarding_data) : onboarding_data;
+    if (!finalBirthDate && od['patient-birth-date']) finalBirthDate = od['patient-birth-date'];
     if (!finalBirthDate && od['Fecha de nacimiento']) finalBirthDate = od['Fecha de nacimiento'];
-    if (!finalWeight && od['Peso']) finalWeight = parseFloat(od['Peso']) || 0;
-    if (!finalHeight && od['Talla']) finalHeight = parseFloat(od['Talla']) || 0;
     if (!finalSex && od['Sexo']) finalSex = od['Sexo'];
   }
 
   const result = db.prepare(`
-    INSERT INTO patients (name, birth_date, sex, weight, height, doctor_id, tutor_id, onboarding_data)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO patients (
+      name, birth_date, sex, weight, height, doctor_id, tutor_id, onboarding_data,
+      birth_state, birth_city, parents_education,
+      gestational_age, gestational_type, delivery_type,
+      birth_weight, birth_height, birth_head_circ,
+      apgar_1, apgar_5, silverman_score,
+      nicu_stay, nicu_days, breastfed, breastfed_months,
+      torch_exposure, neonatal_screening, maternal_age, prenatal_visits
+    ) VALUES (
+      ?,?,?,?,?,?,?,?,
+      ?,?,?,
+      ?,?,?,
+      ?,?,?,
+      ?,?,?,
+      ?,?,?,?,
+      ?,?,?,?
+    )
   `).run(
     name.trim(),
     finalBirthDate || null,
@@ -112,10 +142,43 @@ router.post('/', requireRole('admin', 'pediatra'), (req, res) => {
     finalHeight,
     doctor_id,
     tutor_id,
-    onboarding_data ? JSON.stringify(onboarding_data) : null
+    onboarding_data ? JSON.stringify(onboarding_data) : null,
+    birth_state || null, birth_city || null,
+    parents_education ? JSON.stringify(parents_education) : null,
+    gestational_age ? parseInt(gestational_age) : null,
+    gestational_type || null, delivery_type || null,
+    birth_weight ? parseFloat(birth_weight) : null,
+    birth_height ? parseFloat(birth_height) : null,
+    birth_head_circ ? parseFloat(birth_head_circ) : null,
+    apgar_1 ? parseInt(apgar_1) : null,
+    apgar_5 ? parseInt(apgar_5) : null,
+    silverman_score ? parseInt(silverman_score) : null,
+    nicu_stay ? 1 : 0, nicu_days ? parseInt(nicu_days) : null,
+    breastfed ? 1 : 0, breastfed_months ? parseInt(breastfed_months) : null,
+    torch_exposure ? JSON.stringify(torch_exposure) : null,
+    neonatal_screening ? 1 : 0,
+    maternal_age ? parseInt(maternal_age) : null,
+    prenatal_visits ? parseInt(prenatal_visits) : null,
   );
 
-  const created = parsePatient(db.prepare(`${WITH_DOCTOR} WHERE p.id = ?`).get(result.lastInsertRowid));
+  const patientId = result.lastInsertRowid;
+
+  // Insertar antecedentes heredofamiliares si se proporcionaron
+  if (Array.isArray(family_history) && family_history.length > 0) {
+    const insertFH = db.prepare(
+      'INSERT INTO family_history (patient_id, condition, relationship, notes) VALUES (?, ?, ?, ?)'
+    );
+    const insertMany = db.transaction((rows) => {
+      for (const row of rows) {
+        if (row.condition && row.relationship) {
+          insertFH.run(patientId, row.condition, row.relationship, row.notes || null);
+        }
+      }
+    });
+    insertMany(family_history);
+  }
+
+  const created = parsePatient(db.prepare(`${WITH_DOCTOR} WHERE p.id = ?`).get(patientId));
 
   // Enviar correo de bienvenida si se creó una nueva cuenta de tutor
   if (generatedPassword && tutor_email) {

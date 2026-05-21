@@ -84,10 +84,48 @@ function seedDefaultUsers() {
 
 function runMigrations() {
   // Fase F: próxima visita sugerida en consultas
-  try {
-    db.prepare('ALTER TABLE consultations ADD COLUMN next_visit_date TEXT').run();
-    console.log('✓ Migración: columna next_visit_date agregada');
-  } catch (e) { /* columna ya existe */ }
+  try { db.prepare('ALTER TABLE consultations ADD COLUMN next_visit_date TEXT').run(); } catch (e) {}
+
+  // Fase A: historia clínica estructurada en patients
+  const phaseACols = [
+    'ALTER TABLE patients ADD COLUMN birth_state       TEXT',
+    'ALTER TABLE patients ADD COLUMN birth_city        TEXT',
+    'ALTER TABLE patients ADD COLUMN parents_education TEXT',
+    'ALTER TABLE patients ADD COLUMN gestational_age   INTEGER',
+    'ALTER TABLE patients ADD COLUMN gestational_type  TEXT',
+    'ALTER TABLE patients ADD COLUMN delivery_type     TEXT',
+    'ALTER TABLE patients ADD COLUMN birth_weight      REAL',
+    'ALTER TABLE patients ADD COLUMN birth_height      REAL',
+    'ALTER TABLE patients ADD COLUMN birth_head_circ   REAL',
+    'ALTER TABLE patients ADD COLUMN apgar_1           INTEGER',
+    'ALTER TABLE patients ADD COLUMN apgar_5           INTEGER',
+    'ALTER TABLE patients ADD COLUMN silverman_score   INTEGER',
+    'ALTER TABLE patients ADD COLUMN nicu_stay         INTEGER DEFAULT 0',
+    'ALTER TABLE patients ADD COLUMN nicu_days         INTEGER',
+    'ALTER TABLE patients ADD COLUMN breastfed         INTEGER',
+    'ALTER TABLE patients ADD COLUMN breastfed_months  INTEGER',
+    'ALTER TABLE patients ADD COLUMN torch_exposure    TEXT',
+    'ALTER TABLE patients ADD COLUMN neonatal_screening INTEGER',
+    'ALTER TABLE patients ADD COLUMN maternal_age      INTEGER',
+    'ALTER TABLE patients ADD COLUMN prenatal_visits   INTEGER',
+  ];
+  for (const sql of phaseACols) {
+    try { db.prepare(sql).run(); } catch (e) {}
+  }
+
+  // Fase A: tabla de antecedentes heredofamiliares
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS family_history (
+      id           INTEGER PRIMARY KEY AUTOINCREMENT,
+      patient_id   INTEGER NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+      condition    TEXT NOT NULL,
+      relationship TEXT NOT NULL,
+      notes        TEXT,
+      created_at   TEXT DEFAULT (datetime('now'))
+    );
+  `);
+
+  console.log('✓ Migraciones ejecutadas');
 }
 
 function initDB() {

@@ -486,15 +486,37 @@ function renderParentProfile() {
         <div class="timeline">${historyHtml}</div>
       </div>
 
-      ${p.onboarding_data && Object.keys(p.onboarding_data).length > 0 ? `
+      ${(p.onboarding_data && Object.keys(p.onboarding_data).length > 0) || (p.family_history && p.family_history.length > 0) || p.delivery_type ? `
       <div class="history-section" style="margin-top:2rem;">
         <h2 style="margin-bottom:2rem;font-size:1.8rem;border-bottom:2px solid var(--primary-light);padding-bottom:0.5rem;">Expediente de Ingreso</h2>
-        ${Object.entries(categorizeOnboardingData(p.onboarding_data)).map(([cat, items]) => {
+
+        ${p.family_history && p.family_history.length > 0 ? `
+        <details class="expediente-accordion">
+          <summary class="expediente-summary">
+            <div style="display:flex;align-items:center;gap:0.8rem;"><i class="fa-solid fa-dna" style="color:#8b5cf6;"></i> Antecedentes Heredofamiliares</div>
+            <i class="fa-solid fa-chevron-down accordion-icon" style="color:var(--text-light);transition:transform 0.3s;"></i>
+          </summary>
+          <div class="expediente-accordion-content">
+            <div style="display:flex;flex-direction:column;gap:0.5rem;">
+              ${p.family_history.map(fh => `
+              <div style="display:flex;align-items:center;gap:0.7rem;padding:0.5rem 0.8rem;background:#faf5ff;border-radius:8px;border-left:3px solid #8b5cf6;">
+                <i class="fa-solid fa-circle-dot" style="color:#8b5cf6;font-size:0.8rem;"></i>
+                <span style="font-weight:500;">${fh.condition}</span>
+                <span style="color:var(--text-light);font-size:0.85rem;">— ${fh.relationship}</span>
+                ${fh.notes ? `<span style="color:var(--text-light);font-size:0.8rem;font-style:italic;">${fh.notes}</span>` : ''}
+              </div>`).join('')}
+            </div>
+          </div>
+        </details>` : ''}
+
+        ${p.onboarding_data && Object.keys(p.onboarding_data).length > 0 ? Object.entries(categorizeOnboardingData(p.onboarding_data)).map(([cat, items]) => {
           if (!items.length) return '';
+          const catIcons = {'Ficha de Identificación':'fa-id-card','Contexto Familiar':'fa-house-chimney','Antecedentes Prenatales':'fa-person-pregnant','Datos Perinatales':'fa-baby','Antecedentes Personales':'fa-heart-pulse','Otros Registros':'fa-folder'};
+          const icon = catIcons[cat] || 'fa-folder';
           return `
-          <details class="expediente-accordion" ${cat === 'Datos Generales y Nacimiento' ? 'open' : ''}>
+          <details class="expediente-accordion" ${cat === 'Ficha de Identificación' || cat === 'Datos Generales y Nacimiento' ? 'open' : ''}>
             <summary class="expediente-summary">
-              <div style="display:flex;align-items:center;gap:0.8rem;"><i class="fa-solid fa-folder folder-icon" style="color:var(--secondary);"></i> ${cat}</div>
+              <div style="display:flex;align-items:center;gap:0.8rem;"><i class="fa-solid ${icon}" style="color:var(--secondary);"></i> ${cat}</div>
               <i class="fa-solid fa-chevron-down accordion-icon" style="color:var(--text-light);transition:transform 0.3s;"></i>
             </summary>
             <div class="expediente-accordion-content">
@@ -507,7 +529,7 @@ function renderParentProfile() {
               </div>
             </div>
           </details>`;
-        }).join('')}
+        }).join('') : ''}
       </div>` : ''}
     </div>
   `;
@@ -950,159 +972,422 @@ function renderModals() {
 }
 
 // === Onboarding ===
+// Helpers para step 3 (antecedentes heredofamiliares)
+if (!window.familyHistoryData) window.familyHistoryData = [];
+
+window.toggleFHCondition = function(condition, checkbox) {
+  if (checkbox.checked) {
+    if (!window.familyHistoryData.find(r => r.condition === condition)) {
+      window.familyHistoryData.push({ condition, relationship: '', notes: '' });
+    }
+  } else {
+    window.familyHistoryData = window.familyHistoryData.filter(r => r.condition !== condition);
+  }
+  renderFHRelatives(condition);
+};
+
+window.updateFHRelationship = function(condition, select) {
+  const row = window.familyHistoryData.find(r => r.condition === condition);
+  if (row) row.relationship = Array.from(select.selectedOptions).map(o => o.value).join(', ');
+};
+
+function renderFHRelatives(condition) {
+  const container = document.getElementById('fh-rel-' + condition.replace(/\s/g,'_'));
+  if (!container) return;
+  const row = window.familyHistoryData.find(r => r.condition === condition);
+  if (!row) { container.innerHTML = ''; container.style.display = 'none'; return; }
+  container.style.display = 'block';
+  container.innerHTML = `
+    <div style="margin-top:0.5rem;">
+      <label style="font-size:0.85rem;color:var(--text-light);margin-bottom:0.3rem;display:block;">Familiar(es) afectado(s) — mantén Ctrl para seleccionar varios</label>
+      <select multiple class="form-control" style="height:90px;font-size:0.9rem;" onchange="updateFHRelationship('${condition}', this)">
+        ${['Padre','Madre','Abuelo paterno','Abuela paterna','Abuelo materno','Abuela materna','Hermano/a','Tío/a','Primo/a','Otro'].map(r => `<option value="${r}">${r}</option>`).join('')}
+      </select>
+    </div>`;
+}
+
 function renderOnboarding() {
   const totalSteps = 7;
-  const stepTitles = ['Datos Generales y Nacimiento','Antecedentes Familiares','Primeros Estudios y Vacunas','Alimentación','Digestión (Pañales)','Sueño y Seguridad','Desarrollo y Sentidos'];
+  const stepTitles = [
+    'Ficha de Identificación',
+    'Contexto Familiar',
+    'Antecedentes Heredofamiliares',
+    'Antecedentes Prenatales',
+    'Datos Perinatales',
+    'Antecedentes Personales',
+    'Acceso del Tutor'
+  ];
+  const stepIcons = ['fa-id-card','fa-house-chimney','fa-dna','fa-person-pregnant','fa-baby','fa-heart-pulse','fa-key'];
   let content = '';
 
   if (currentOnboardingStep === 1) {
+    // ── Ficha de Identificación ──────────────────────────────────
     content = `
-      <div class="form-group"><label>Nombre completo del bebé</label><input type="text" id="new-patient-name" class="form-control" placeholder="Ej. Juan Pérez"></div>
+      <p style="color:var(--text-light);margin-bottom:1.5rem;font-size:0.95rem;">Campos con <span style="color:#ef4444;">*</span> son obligatorios.</p>
+      <div class="form-group">
+        <label>Nombre completo del paciente <span style="color:#ef4444;">*</span></label>
+        <input type="text" id="new-patient-name" class="form-control" placeholder="Ej. Juan Carlos Pérez Gómez" required>
+      </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1.5rem;">
-        <div class="form-group" style="margin-bottom:0;"><label>Fecha de nacimiento</label><input type="date" class="form-control"></div>
-        <div class="form-group" style="margin-bottom:0;"><label>Sexo</label><select name="Sexo" class="form-control"><option value="">Selecciona...</option><option>Masculino</option><option>Femenino</option></select></div>
+        <div class="form-group" style="margin-bottom:0;">
+          <label>Fecha de nacimiento <span style="color:#ef4444;">*</span></label>
+          <input type="date" id="patient-birth-date" name="patient-birth-date" class="form-control" required>
+        </div>
+        <div class="form-group" style="margin-bottom:0;">
+          <label>Sexo <span style="color:#ef4444;">*</span></label>
+          <select name="Sexo" class="form-control" required>
+            <option value="">Selecciona...</option>
+            <option>Masculino</option>
+            <option>Femenino</option>
+          </select>
+        </div>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1.5rem;">
-        <div class="form-group" style="margin-bottom:0;"><label>Nombre de la mamá</label><input type="text" class="form-control" placeholder="Ej. María Gómez"></div>
-        <div class="form-group" style="margin-bottom:0;"><label>Nombre del papá</label><input type="text" class="form-control" placeholder="Ej. Carlos Pérez"></div>
-      </div>
-      <hr style="border:0;border-top:1px solid #E2E8F0;margin:2rem 0;">
-      <h3 style="margin-bottom:1.5rem;color:var(--primary);">Información del Embarazo y Nacimiento</h3>
-      <div class="form-group"><label>¿De cuántas semanas nació?</label><input type="number" class="form-control" placeholder="Ej. 39"></div>
-      <div class="form-group">
-        <label>¿Hubo complicaciones durante el embarazo?</label>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.8rem;margin-top:0.5rem;margin-bottom:0.5rem;">
-          <label style="display:flex;align-items:center;gap:0.5rem;font-weight:400;cursor:pointer;"><input type="checkbox" value="Ninguna" onchange="handleComplicationsChange(this)"> Ninguna</label>
-          <label style="display:flex;align-items:center;gap:0.5rem;font-weight:400;cursor:pointer;"><input type="checkbox" value="Infecciones" onchange="handleComplicationsChange(this)"> Infecciones</label>
-          <label style="display:flex;align-items:center;gap:0.5rem;font-weight:400;cursor:pointer;"><input type="checkbox" value="Presión alta" onchange="handleComplicationsChange(this)"> Presión alta</label>
-          <label style="display:flex;align-items:center;gap:0.5rem;font-weight:400;cursor:pointer;"><input type="checkbox" value="Diabetes" onchange="handleComplicationsChange(this)"> Diabetes</label>
-          <label style="display:flex;align-items:center;gap:0.5rem;font-weight:400;cursor:pointer;"><input type="checkbox" value="Otra" onchange="handleComplicationsChange(this)"> Otra</label>
+        <div class="form-group" style="margin-bottom:0;">
+          <label>Estado de nacimiento</label>
+          <input type="text" id="patient-birth-state" class="form-control" placeholder="Ej. Jalisco">
         </div>
-        <input type="text" id="otra-complicacion" class="form-control" placeholder="Especificar..." style="display:none;margin-top:0.5rem;">
-      </div>
-      <div class="form-group">
-        <label>¿Tomaste medicamentos durante el embarazo?</label>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.8rem;margin-top:0.5rem;margin-bottom:0.5rem;">
-          <label style="display:flex;align-items:center;gap:0.5rem;font-weight:400;cursor:pointer;"><input type="checkbox" value="Ninguno" onchange="handleMedicationsChange(this)"> Ninguno</label>
-          <label style="display:flex;align-items:center;gap:0.5rem;font-weight:400;cursor:pointer;"><input type="checkbox" value="Ácido Fólico" onchange="handleMedicationsChange(this)"> Ácido Fólico</label>
-          <label style="display:flex;align-items:center;gap:0.5rem;font-weight:400;cursor:pointer;"><input type="checkbox" value="Hierro" onchange="handleMedicationsChange(this)"> Hierro</label>
-          <label style="display:flex;align-items:center;gap:0.5rem;font-weight:400;cursor:pointer;"><input type="checkbox" value="Vitaminas prenatales" onchange="handleMedicationsChange(this)"> Vitaminas prenatales</label>
-          <label style="display:flex;align-items:center;gap:0.5rem;font-weight:400;cursor:pointer;"><input type="checkbox" value="Otros" onchange="handleMedicationsChange(this)"> Otros</label>
+        <div class="form-group" style="margin-bottom:0;">
+          <label>Municipio/Ciudad</label>
+          <input type="text" id="patient-birth-city" class="form-control" placeholder="Ej. Guadalajara">
         </div>
-        <input type="text" id="otros-medicamentos" class="form-control" placeholder="Especificar..." style="display:none;margin-top:0.5rem;">
       </div>
-      <div class="form-group">
-        <label>¿Parto natural o cesárea?</label>
-        <div style="display:flex;gap:2rem;margin-top:0.5rem;">
-          <label style="display:flex;align-items:center;gap:0.5rem;font-weight:400;cursor:pointer;"><input type="radio" name="tipoParto" value="Natural" onchange="document.getElementById('motivo-cesarea').style.display='none'"> Natural</label>
-          <label style="display:flex;align-items:center;gap:0.5rem;font-weight:400;cursor:pointer;"><input type="radio" name="tipoParto" value="Cesárea" onchange="document.getElementById('motivo-cesarea').style.display='block'"> Cesárea</label>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1.5rem;">
+        <div class="form-group" style="margin-bottom:0;">
+          <label>Nombre de la mamá</label>
+          <input type="text" id="mom-name" class="form-control" placeholder="Ej. María Gómez">
         </div>
-        <input type="text" id="motivo-cesarea" class="form-control" placeholder="¿Motivo de la cesárea?" style="display:none;margin-top:0.5rem;">
-      </div>
-      <div class="form-group">
-        <label>¿El bebé lloró y respiró inmediatamente?</label>
-        <div style="display:flex;gap:2rem;margin-top:0.5rem;">
-          <label style="display:flex;align-items:center;gap:0.5rem;font-weight:400;cursor:pointer;"><input type="radio" name="lloroNacer" value="Sí" onchange="document.getElementById('motivo-no-lloro').style.display='none'"> Sí</label>
-          <label style="display:flex;align-items:center;gap:0.5rem;font-weight:400;cursor:pointer;"><input type="radio" name="lloroNacer" value="No" onchange="document.getElementById('motivo-no-lloro').style.display='block'"> No</label>
-        </div>
-        <input type="text" id="motivo-no-lloro" class="form-control" placeholder="¿Por qué no?" style="display:none;margin-top:0.5rem;margin-bottom:1rem;">
-        <label style="margin-top:1rem;display:block;font-size:0.95rem;color:var(--text-light);">Calificación Apgar:</label>
-        <div style="display:flex;gap:0.5rem;margin-top:0.5rem;flex-wrap:wrap;">
-          ${[1,2,3,4,5,6,7,8,9].map(n => `<input type="radio" name="apgarScore" id="apgar${n}" value="${n}" class="apgar-radio"><label for="apgar${n}" class="apgar-label">${n}</label>`).join('')}
+        <div class="form-group" style="margin-bottom:0;">
+          <label>Nombre del papá</label>
+          <input type="text" id="dad-name" class="form-control" placeholder="Ej. Carlos Pérez">
         </div>
       </div>
       <div class="form-group">
-        <label>Peso (kg), Talla (cm) y PC (cm) al nacer</label>
-        <div style="display:flex;gap:1rem;">
-          <input type="number" step="0.1" class="form-control" placeholder="Peso">
-          <input type="number" step="0.1" class="form-control" placeholder="Talla">
-          <input type="number" step="0.1" class="form-control" placeholder="PC">
-        </div>
-      </div>
-      <div class="form-group">
-        <label>¿Se fue a casa o quedó internado?</label>
-        <div style="display:flex;gap:2rem;margin-top:0.5rem;">
-          <label style="display:flex;align-items:center;gap:0.5rem;font-weight:400;cursor:pointer;"><input type="radio" name="fueACasa" value="Sí" onchange="document.getElementById('motivo-internado').style.display='none'"> A casa</label>
-          <label style="display:flex;align-items:center;gap:0.5rem;font-weight:400;cursor:pointer;"><input type="radio" name="fueACasa" value="No" onchange="document.getElementById('motivo-internado').style.display='block'"> Internado</label>
-        </div>
-        <input type="text" id="motivo-internado" class="form-control" placeholder="¿Motivo?" style="display:none;margin-top:0.5rem;">
-      </div>
-      <div class="form-group">
-        <label>¿Presentó ictericia?</label>
-        <div style="display:flex;gap:2rem;margin-top:0.5rem;">
-          <label style="display:flex;align-items:center;gap:0.5rem;font-weight:400;cursor:pointer;"><input type="radio" name="ictericia" value="Sí"> Sí</label>
-          <label style="display:flex;align-items:center;gap:0.5rem;font-weight:400;cursor:pointer;"><input type="radio" name="ictericia" value="No"> No</label>
-        </div>
+        <label>CURP (opcional)</label>
+        <input type="text" id="patient-curp" class="form-control" placeholder="18 caracteres" maxlength="18" style="text-transform:uppercase;">
       </div>`;
+
   } else if (currentOnboardingStep === 2) {
+    // ── Contexto Familiar ─────────────────────────────────────────
     content = `
-      <div class="form-group"><label>¿Enfermedades importantes en la familia?</label><textarea class="form-control" rows="3" placeholder="Detallar familiares y enfermedades..."></textarea></div>
-      <div class="form-group"><label>Estatura de mamá y papá (cm)</label><div style="display:flex;gap:1rem;"><input type="number" class="form-control" placeholder="Estatura Mamá"><input type="number" class="form-control" placeholder="Estatura Papá"></div></div>`;
-  } else if (currentOnboardingStep === 3) {
-    const tamices = [{id:'metabolico',label:'Tamiz Metabólico'},{id:'auditivo',label:'Tamiz Auditivo'},{id:'cardiaco',label:'Tamiz Cardiaco'},{id:'visual',label:'Tamiz Visual'},{id:'ortopedico',label:'Tamiz Ortopédico'}];
-    content = `
-      <h3 style="margin-bottom:1.5rem;color:var(--primary);">Tamices Neonatales</h3>
-      ${tamices.map(t => `
-        <div class="form-group">
-          <label>${t.label}</label>
-          <div style="display:flex;gap:2rem;margin-top:0.5rem;">
-            <label style="display:flex;align-items:center;gap:0.5rem;font-weight:400;cursor:pointer;"><input type="radio" name="tamiz_${t.id}" value="Sí" onchange="document.getElementById('resultado-${t.id}').style.display='block'"> Sí</label>
-            <label style="display:flex;align-items:center;gap:0.5rem;font-weight:400;cursor:pointer;"><input type="radio" name="tamiz_${t.id}" value="No" onchange="document.getElementById('resultado-${t.id}').style.display='none'"> No</label>
-          </div>
-          <div id="resultado-${t.id}" style="display:none;margin-top:0.5rem;">
-            <select class="form-control"><option value="">Resultado...</option><option>Normal</option><option>Anormal</option><option>No concluyente</option></select>
-          </div>
-        </div>`).join('')}
-      <hr style="border:0;border-top:1px solid #E2E8F0;margin:2rem 0;">
-      <h3 style="margin-bottom:1.5rem;color:var(--primary);">Vacunas al Nacer</h3>
-      <div class="form-group"><label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-weight:500;"><input type="checkbox" onchange="document.getElementById('fecha-bcg').style.display=this.checked?'block':'none'"> BCG (Tuberculosis)</label><div id="fecha-bcg" style="display:none;margin-top:0.5rem;"><input type="date" class="form-control" style="max-width:250px;"></div></div>
-      <div class="form-group"><label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-weight:500;"><input type="checkbox" onchange="document.getElementById('fecha-hepb').style.display=this.checked?'block':'none'"> Hepatitis B (1ra dosis)</label><div id="fecha-hepb" style="display:none;margin-top:0.5rem;"><input type="date" class="form-control" style="max-width:250px;"></div></div>`;
-  } else if (currentOnboardingStep === 4) {
-    content = `
-      <div class="form-group"><label>¿Qué está comiendo el bebé?</label><select class="form-control" onchange="handleAlimentacionChange(this.value)"><option value="">Selecciona...</option><option value="materna">Leche materna exclusiva</option><option value="formula">Fórmula exclusiva</option><option value="mixta">Lactancia mixta</option></select></div>
-      <div id="seccion-materna" style="display:none;">
-        <h4 style="color:var(--primary);margin-bottom:1rem;margin-top:1.5rem;border-bottom:1px solid var(--primary-light);padding-bottom:0.5rem;">Detalles Leche Materna</h4>
-        <div class="form-group"><label>¿Cada cuánto pide pecho?</label><input type="text" class="form-control" placeholder="Ej. A libre demanda, cada 2 horas..."></div>
-        <div class="form-group"><label>¿Cuánto dura comiendo?</label><input type="text" class="form-control" placeholder="Ej. 15 minutos por pecho..."></div>
-        <div class="form-group"><label>¿Tienes dolor al amamantar?</label><div style="display:flex;gap:2rem;margin-top:0.5rem;"><label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;"><input type="radio" name="dolorPecho" value="Sí"> Sí</label><label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;"><input type="radio" name="dolorPecho" value="No"> No</label></div></div>
-        <div class="form-group"><label>Comentarios</label><textarea class="form-control" rows="2" placeholder="Ej. Problemas de agarre, uso de pezoneras..."></textarea></div>
+      <h4 style="color:var(--primary);margin-bottom:1rem;">Escolaridad y Ocupación</h4>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem;">
+        <div class="form-group" style="margin-bottom:0;">
+          <label>Escolaridad de la mamá</label>
+          <select id="mom-education" class="form-control">
+            <option value="">Selecciona...</option>
+            <option>Sin estudios</option><option>Primaria</option><option>Secundaria</option>
+            <option>Preparatoria</option><option>Técnico/Vocacional</option>
+            <option>Licenciatura</option><option>Posgrado</option>
+          </select>
+        </div>
+        <div class="form-group" style="margin-bottom:0;">
+          <label>Escolaridad del papá</label>
+          <select id="dad-education" class="form-control">
+            <option value="">Selecciona...</option>
+            <option>Sin estudios</option><option>Primaria</option><option>Secundaria</option>
+            <option>Preparatoria</option><option>Técnico/Vocacional</option>
+            <option>Licenciatura</option><option>Posgrado</option>
+          </select>
+        </div>
       </div>
-      <div id="seccion-formula" style="display:none;">
-        <h4 style="color:var(--secondary);margin-bottom:1rem;margin-top:1.5rem;border-bottom:1px solid var(--primary-light);padding-bottom:0.5rem;">Detalles Fórmula</h4>
-        <div class="form-group"><label>¿Qué marca de fórmula?</label><input type="text" class="form-control" placeholder="Ej. NAN 1, Similac..."></div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;"><div class="form-group" style="margin-bottom:0;"><label>¿Cuántas onzas?</label><input type="number" step="0.5" class="form-control" placeholder="Ej. 3"></div><div class="form-group" style="margin-bottom:0;"><label>¿Cada cuántas horas?</label><input type="number" step="0.5" class="form-control" placeholder="Ej. 3"></div></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1.5rem;">
+        <div class="form-group" style="margin-bottom:0;">
+          <label>Ocupación de la mamá</label>
+          <input type="text" id="mom-occupation" class="form-control" placeholder="Ej. Enfermera">
+        </div>
+        <div class="form-group" style="margin-bottom:0;">
+          <label>Ocupación del papá</label>
+          <input type="text" id="dad-occupation" class="form-control" placeholder="Ej. Ingeniero">
+        </div>
+      </div>
+      <hr style="border:0;border-top:1px solid #E2E8F0;margin:1.5rem 0;">
+      <h4 style="color:var(--primary);margin-bottom:1rem;">Composición del Hogar</h4>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem;">
+        <div class="form-group" style="margin-bottom:0;">
+          <label>Número de hermanos</label>
+          <input type="number" id="siblings-count" class="form-control" min="0" placeholder="0">
+        </div>
+        <div class="form-group" style="margin-bottom:0;">
+          <label>Tipo de vivienda</label>
+          <select id="housing-type" class="form-control">
+            <option value="">Selecciona...</option>
+            <option>Propia</option><option>Rentada</option>
+            <option>Prestada/Familiar</option><option>Otro</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>¿Hay mascotas en casa?</label>
+        <div style="display:flex;gap:2rem;margin-top:0.5rem;">
+          <label style="font-weight:400;cursor:pointer;display:flex;align-items:center;gap:0.5rem;"><input type="radio" name="pets" value="Sí"> Sí</label>
+          <label style="font-weight:400;cursor:pointer;display:flex;align-items:center;gap:0.5rem;"><input type="radio" name="pets" value="No"> No</label>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>¿Alguien fuma en el hogar?</label>
+        <div style="display:flex;gap:2rem;margin-top:0.5rem;">
+          <label style="font-weight:400;cursor:pointer;display:flex;align-items:center;gap:0.5rem;"><input type="radio" name="smokers-home" value="Sí"> Sí</label>
+          <label style="font-weight:400;cursor:pointer;display:flex;align-items:center;gap:0.5rem;"><input type="radio" name="smokers-home" value="No"> No</label>
+        </div>
       </div>`;
+
+  } else if (currentOnboardingStep === 3) {
+    // ── Antecedentes Heredofamiliares ─────────────────────────────
+    const conditions = [
+      'Diabetes mellitus','Hipertensión arterial','Cardiopatía coronaria',
+      'Asma / Atopia','Obesidad / Sobrepeso','Cáncer',
+      'Autismo / TEA','Síndrome de Down / Cromosómico',
+      'Epilepsia / Convulsiones','Enfermedad renal crónica',
+      'Artritis / Enf. autoinmune','Salud mental (depresión, esquizofrenia)',
+    ];
+    const currentChecked = new Set(window.familyHistoryData.map(r => r.condition));
+    content = `
+      <p style="color:var(--text-light);font-size:0.9rem;margin-bottom:1.5rem;">Marca las condiciones presentes en la familia y selecciona quién las padece. Este paso es opcional.</p>
+      <div style="display:flex;flex-direction:column;gap:0.8rem;">
+        ${conditions.map(c => {
+          const safeId = c.replace(/[\s/()]/g,'_');
+          const isChecked = currentChecked.has(c);
+          return `
+          <div style="background:#f8fafc;border-radius:10px;padding:0.9rem 1.1rem;border:1px solid ${isChecked ? 'var(--primary)' : '#e2e8f0'};">
+            <label style="display:flex;align-items:center;gap:0.7rem;cursor:pointer;font-weight:500;">
+              <input type="checkbox" value="${c}" ${isChecked ? 'checked' : ''} onchange="toggleFHCondition('${c}', this)" style="width:16px;height:16px;accent-color:var(--primary);">
+              ${c}
+            </label>
+            <div id="fh-rel-${safeId}" style="display:${isChecked ? 'block' : 'none'};"></div>
+          </div>`;
+        }).join('')}
+      </div>`;
+
+  } else if (currentOnboardingStep === 4) {
+    // ── Antecedentes Prenatales ────────────────────────────────────
+    content = `
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1.5rem;">
+        <div class="form-group" style="margin-bottom:0;">
+          <label>Número de gestación</label>
+          <select id="gesta-num" class="form-control">
+            <option value="">Selecciona...</option>
+            <option value="1">Primero (primogénito)</option>
+            <option value="2">Segundo</option>
+            <option value="3">Tercero</option>
+            <option value="4+">Cuarto o más</option>
+          </select>
+        </div>
+        <div class="form-group" style="margin-bottom:0;">
+          <label>Edad de la mamá al embarazo</label>
+          <input type="number" id="maternal-age" class="form-control" min="14" max="55" placeholder="Años">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Control prenatal</label>
+        <div style="display:flex;gap:2rem;margin-top:0.5rem;flex-wrap:wrap;align-items:center;">
+          <label style="font-weight:400;cursor:pointer;display:flex;align-items:center;gap:0.5rem;"><input type="radio" name="prenatal-ctrl" value="Sí" onchange="document.getElementById('prenatal-visits-grp').style.display='flex'"> Sí</label>
+          <label style="font-weight:400;cursor:pointer;display:flex;align-items:center;gap:0.5rem;"><input type="radio" name="prenatal-ctrl" value="No" onchange="document.getElementById('prenatal-visits-grp').style.display='none'"> No</label>
+          <div id="prenatal-visits-grp" style="display:none;align-items:center;gap:0.5rem;">
+            <label style="font-weight:400;white-space:nowrap;">Número de consultas:</label>
+            <input type="number" id="prenatal-visits" class="form-control" min="1" max="20" placeholder="Ej. 8" style="width:90px;">
+          </div>
+        </div>
+      </div>
+      <hr style="border:0;border-top:1px solid #E2E8F0;margin:1.5rem 0;">
+      <h4 style="color:var(--primary);margin-bottom:1rem;">Exposiciones durante el Embarazo</h4>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem;">
+        <div class="form-group" style="margin-bottom:0;">
+          <label>Tabaquismo</label>
+          <div style="display:flex;gap:1.5rem;margin-top:0.5rem;">
+            <label style="font-weight:400;cursor:pointer;display:flex;align-items:center;gap:0.5rem;"><input type="radio" name="tobacco-preg" value="Sí"> Sí</label>
+            <label style="font-weight:400;cursor:pointer;display:flex;align-items:center;gap:0.5rem;"><input type="radio" name="tobacco-preg" value="No"> No</label>
+          </div>
+        </div>
+        <div class="form-group" style="margin-bottom:0;">
+          <label>Consumo de alcohol</label>
+          <div style="display:flex;gap:1.5rem;margin-top:0.5rem;">
+            <label style="font-weight:400;cursor:pointer;display:flex;align-items:center;gap:0.5rem;"><input type="radio" name="alcohol-preg" value="Sí"> Sí</label>
+            <label style="font-weight:400;cursor:pointer;display:flex;align-items:center;gap:0.5rem;"><input type="radio" name="alcohol-preg" value="No"> No</label>
+          </div>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Infecciones TORCH (marca si hubo)</label>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;margin-top:0.6rem;">
+          ${['Toxoplasma','Rubeola','Citomegalovirus (CMV)','Herpes','Sífilis','VIH / SIDA','Hepatitis B','Otra infección'].map(t =>
+            `<label style="display:flex;align-items:center;gap:0.5rem;font-weight:400;cursor:pointer;padding:0.4rem;border-radius:6px;background:#f8fafc;">
+              <input type="checkbox" name="torch" value="${t}" style="accent-color:var(--primary);"> ${t}
+            </label>`
+          ).join('')}
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Complicaciones obstétricas</label>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;margin-top:0.6rem;">
+          ${['Ninguna','Preeclampsia','Diabetes gestacional','Placenta previa','RPM (ruptura prematura)','Amenaza de aborto','Otra'].map(c =>
+            `<label style="display:flex;align-items:center;gap:0.5rem;font-weight:400;cursor:pointer;padding:0.4rem;border-radius:6px;background:#f8fafc;">
+              <input type="checkbox" name="obstetric-comp" value="${c}" style="accent-color:var(--primary);"> ${c}
+            </label>`
+          ).join('')}
+        </div>
+      </div>`;
+
   } else if (currentOnboardingStep === 5) {
+    // ── Datos Perinatales ─────────────────────────────────────────
     content = `
-      <div class="form-group"><label>¿Regurgita mucha leche?</label><input type="text" class="form-control" placeholder="Sí / No, frecuencia..."></div>
-      <div class="form-group"><label>¿Cuántos pañales de pipí en 24h?</label><input type="number" class="form-control" placeholder="Ej. 6"></div>
-      <div class="form-group"><label>¿Cuántas veces hace popó y cómo es?</label><input type="text" class="form-control" placeholder="Ej. 3 veces, amarillo mostaza, aguada..."></div>
-      <div class="form-group"><label>¿Sufre de cólicos?</label><textarea class="form-control" rows="2" placeholder="Ej. Sí, por las tardes llora mucho..."></textarea></div>`;
+      <div class="form-group">
+        <label>Tipo de parto <span style="color:#ef4444;">*</span></label>
+        <div style="display:flex;gap:2rem;margin-top:0.5rem;flex-wrap:wrap;">
+          <label style="font-weight:400;cursor:pointer;display:flex;align-items:center;gap:0.5rem;"><input type="radio" name="delivery-type" value="Vaginal" required> Vaginal</label>
+          <label style="font-weight:400;cursor:pointer;display:flex;align-items:center;gap:0.5rem;"><input type="radio" name="delivery-type" value="Cesárea"> Cesárea</label>
+          <label style="font-weight:400;cursor:pointer;display:flex;align-items:center;gap:0.5rem;"><input type="radio" name="delivery-type" value="Instrumentado"> Instrumentado (fórceps/vacuum)</label>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;margin-bottom:1.5rem;">
+        <div class="form-group" style="margin-bottom:0;">
+          <label>Semanas de gestación <span style="color:#ef4444;">*</span></label>
+          <input type="number" id="gestational-weeks" class="form-control" min="22" max="44" placeholder="Ej. 39" required>
+        </div>
+        <div class="form-group" style="margin-bottom:0;">
+          <label>Peso al nacer (kg)</label>
+          <input type="number" id="birth-weight-kg" step="0.01" class="form-control" placeholder="Ej. 3.25">
+        </div>
+        <div class="form-group" style="margin-bottom:0;">
+          <label>Talla al nacer (cm)</label>
+          <input type="number" id="birth-height-cm" step="0.1" class="form-control" placeholder="Ej. 50">
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;margin-bottom:1.5rem;">
+        <div class="form-group" style="margin-bottom:0;">
+          <label>PC al nacer (cm)</label>
+          <input type="number" id="birth-head-cm" step="0.1" class="form-control" placeholder="Ej. 34">
+        </div>
+        <div class="form-group" style="margin-bottom:0;">
+          <label>Apgar 1 min</label>
+          <input type="number" id="apgar-1" class="form-control" min="0" max="10" placeholder="0–10">
+        </div>
+        <div class="form-group" style="margin-bottom:0;">
+          <label>Apgar 5 min</label>
+          <input type="number" id="apgar-5" class="form-control" min="0" max="10" placeholder="0–10">
+        </div>
+      </div>
+      <hr style="border:0;border-top:1px solid #E2E8F0;margin:1.5rem 0;">
+      <h4 style="color:var(--primary);margin-bottom:1rem;">Estancia Neonatal</h4>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem;">
+        <div class="form-group" style="margin-bottom:0;">
+          <label>UCI / UCIN neonatal</label>
+          <div style="display:flex;gap:1.5rem;margin-top:0.5rem;align-items:center;">
+            <label style="font-weight:400;cursor:pointer;display:flex;align-items:center;gap:0.5rem;"><input type="radio" name="nicu-stay" value="Sí" onchange="document.getElementById('nicu-days-grp').style.display='flex'"> Sí</label>
+            <label style="font-weight:400;cursor:pointer;display:flex;align-items:center;gap:0.5rem;"><input type="radio" name="nicu-stay" value="No" onchange="document.getElementById('nicu-days-grp').style.display='none'"> No</label>
+            <div id="nicu-days-grp" style="display:none;align-items:center;gap:0.5rem;">
+              <input type="number" id="nicu-days" class="form-control" min="1" placeholder="Días" style="width:90px;">
+            </div>
+          </div>
+        </div>
+        <div class="form-group" style="margin-bottom:0;">
+          <label>Fototerapia (ictericia)</label>
+          <div style="display:flex;gap:1.5rem;margin-top:0.5rem;">
+            <label style="font-weight:400;cursor:pointer;display:flex;align-items:center;gap:0.5rem;"><input type="radio" name="phototherapy" value="Sí"> Sí</label>
+            <label style="font-weight:400;cursor:pointer;display:flex;align-items:center;gap:0.5rem;"><input type="radio" name="phototherapy" value="No"> No</label>
+          </div>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Tamiz neonatal realizado</label>
+        <div style="display:flex;gap:2rem;margin-top:0.5rem;">
+          <label style="font-weight:400;cursor:pointer;display:flex;align-items:center;gap:0.5rem;"><input type="radio" name="neonatal-screening" value="Sí"> Sí</label>
+          <label style="font-weight:400;cursor:pointer;display:flex;align-items:center;gap:0.5rem;"><input type="radio" name="neonatal-screening" value="No"> No</label>
+          <label style="font-weight:400;cursor:pointer;display:flex;align-items:center;gap:0.5rem;"><input type="radio" name="neonatal-screening" value="No sé"> No sé</label>
+        </div>
+      </div>`;
+
   } else if (currentOnboardingStep === 6) {
+    // ── Antecedentes Personales ────────────────────────────────────
     content = `
-      <div class="form-group"><label>¿Dónde duerme el bebé?</label><select class="form-control" onchange="document.getElementById('otro-lugar-dormir').style.display=this.value==='Otros'?'block':'none'"><option value="">Selecciona...</option><option>Cuna</option><option>Moisés</option><option>Cama compartida</option><option value="Otros">Otros</option></select><input type="text" id="otro-lugar-dormir" class="form-control" placeholder="Especifica..." style="display:none;margin-top:0.5rem;"></div>
-      <div class="form-group"><label>¿En qué posición lo acuestas?</label><select class="form-control"><option>Boca arriba</option><option>De lado</option><option>Boca abajo</option></select></div>
-      <div class="form-group"><label>¿Hay cobijas o peluches en la cuna?</label><div style="display:flex;gap:2rem;margin-top:0.5rem;"><label style="display:flex;align-items:center;gap:0.5rem;font-weight:400;cursor:pointer;"><input type="radio" name="objetosCuna" value="Sí"> Sí</label><label style="display:flex;align-items:center;gap:0.5rem;font-weight:400;cursor:pointer;"><input type="radio" name="objetosCuna" value="No"> No</label></div></div>
-      <div class="form-group"><label>¿Cuántas horas duerme seguidas?</label><input type="text" class="form-control" placeholder="Ej. 2h de día, 4h de noche..."></div>
-      <div class="form-group"><label>¿Alguien fuma cerca del bebé?</label><div style="display:flex;gap:2rem;margin-top:0.5rem;"><label style="display:flex;align-items:center;gap:0.5rem;font-weight:400;cursor:pointer;"><input type="radio" name="fumaCasa" value="Sí"> Sí</label><label style="display:flex;align-items:center;gap:0.5rem;font-weight:400;cursor:pointer;"><input type="radio" name="fumaCasa" value="No"> No</label></div></div>`;
+      <h4 style="color:var(--primary);margin-bottom:1rem;">Alimentación</h4>
+      <div class="form-group">
+        <label>Lactancia materna</label>
+        <div style="display:flex;gap:2rem;margin-top:0.5rem;align-items:center;flex-wrap:wrap;">
+          <label style="font-weight:400;cursor:pointer;display:flex;align-items:center;gap:0.5rem;"><input type="radio" name="breastfed" value="Sí" onchange="document.getElementById('bf-months-grp').style.display='flex'"> Sí</label>
+          <label style="font-weight:400;cursor:pointer;display:flex;align-items:center;gap:0.5rem;"><input type="radio" name="breastfed" value="No" onchange="document.getElementById('bf-months-grp').style.display='none'"> No</label>
+          <div id="bf-months-grp" style="display:none;align-items:center;gap:0.5rem;">
+            <label style="font-weight:400;white-space:nowrap;">Meses de lactancia:</label>
+            <input type="number" id="breastfed-months" class="form-control" min="0" max="36" placeholder="meses" style="width:90px;">
+          </div>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Tipo de alimentación actual</label>
+        <select id="feeding-type" class="form-control">
+          <option value="">Selecciona...</option>
+          <option>Leche materna exclusiva</option>
+          <option>Fórmula exclusiva</option>
+          <option>Lactancia mixta</option>
+          <option>Ablactación iniciada</option>
+          <option>Alimentación complementaria</option>
+          <option>Dieta familiar</option>
+        </select>
+      </div>
+      <hr style="border:0;border-top:1px solid #E2E8F0;margin:1.5rem 0;">
+      <h4 style="color:var(--primary);margin-bottom:1rem;">Antecedentes Patológicos</h4>
+      <div class="form-group">
+        <label>Alergias conocidas</label>
+        <input type="text" id="known-allergies" class="form-control" placeholder="Ej. Polen, penicilina, látex... o 'Ninguna'">
+      </div>
+      <div class="form-group">
+        <label>Cirugías o procedimientos previos</label>
+        <div style="display:flex;gap:2rem;margin-top:0.5rem;align-items:center;flex-wrap:wrap;">
+          <label style="font-weight:400;cursor:pointer;display:flex;align-items:center;gap:0.5rem;"><input type="radio" name="prev-surgery" value="Sí" onchange="document.getElementById('surgery-detail').style.display='block'"> Sí</label>
+          <label style="font-weight:400;cursor:pointer;display:flex;align-items:center;gap:0.5rem;"><input type="radio" name="prev-surgery" value="No" onchange="document.getElementById('surgery-detail').style.display='none'"> No</label>
+        </div>
+        <textarea id="surgery-detail" class="form-control" rows="2" placeholder="Describir..." style="display:none;margin-top:0.5rem;"></textarea>
+      </div>
+      <div class="form-group">
+        <label>Hospitalizaciones previas</label>
+        <div style="display:flex;gap:2rem;margin-top:0.5rem;align-items:center;flex-wrap:wrap;">
+          <label style="font-weight:400;cursor:pointer;display:flex;align-items:center;gap:0.5rem;"><input type="radio" name="prev-hosp" value="Sí" onchange="document.getElementById('hosp-detail').style.display='block'"> Sí</label>
+          <label style="font-weight:400;cursor:pointer;display:flex;align-items:center;gap:0.5rem;"><input type="radio" name="prev-hosp" value="No" onchange="document.getElementById('hosp-detail').style.display='none'"> No</label>
+        </div>
+        <textarea id="hosp-detail" class="form-control" rows="2" placeholder="Motivo y duración..." style="display:none;margin-top:0.5rem;"></textarea>
+      </div>
+      <div class="form-group">
+        <label>Medicamentos crónicos actuales</label>
+        <input type="text" id="chronic-meds" class="form-control" placeholder="Ej. Fenobarbital, salbutamol... o 'Ninguno'">
+      </div>`;
+
   } else if (currentOnboardingStep === 7) {
-    const devQ = [{id:'fijaMirada',text:'¿Fija la mirada cuando te acercas?'},{id:'sustoRuidos',text:'¿Se sobresalta con ruidos fuertes?'},{id:'calmaVoz',text:'¿Se calma al escuchar tu voz?'},{id:'levantaCabeza',text:'Boca abajo, ¿intenta levantar la cabeza?'}];
+    // ── Acceso Tutor ──────────────────────────────────────────────
     content = `
-      ${devQ.map(q => `<div class="form-group"><label>${q.text}</label><div style="display:flex;gap:2rem;margin-top:0.5rem;"><label style="display:flex;align-items:center;gap:0.5rem;font-weight:400;cursor:pointer;"><input type="radio" name="${q.id}" value="Sí"> Sí</label><label style="display:flex;align-items:center;gap:0.5rem;font-weight:400;cursor:pointer;"><input type="radio" name="${q.id}" value="No"> No</label></div></div>`).join('')}
-      <div class="form-group"><label>¿Cómo es el llanto y cómo lo calman?</label><textarea class="form-control" rows="2" placeholder="Ej. Llanto fuerte, se calma al mecerlo..."></textarea></div>
-      <div class="form-group"><label>¿Cómo se sienten emocionalmente?</label><textarea class="form-control" rows="2" placeholder="Ej. Muy cansados pero felices..."></textarea></div>
-      <hr style="border:0;border-top:1px solid #E2E8F0;margin:2rem 0;">
-      <h3 style="margin-bottom:1.5rem;color:var(--primary);">Acceso para el Tutor</h3>
-      <p style="color:var(--text-light);font-size:0.9rem;margin-bottom:1rem;">Se generará una contraseña automática si proporcionas un correo.</p>
-      <div class="form-group"><label>Correo del Tutor</label><input type="email" id="tutorEmail" class="form-control" placeholder="ej. tutor@correo.com"></div>`;
+      <div style="background:var(--primary-light);border-radius:12px;padding:1.5rem;margin-bottom:1.5rem;">
+        <p style="color:var(--primary);font-weight:600;margin-bottom:0.5rem;"><i class="fa-solid fa-circle-info"></i> ¿Cómo funciona el acceso del tutor?</p>
+        <p style="color:var(--text-dark);font-size:0.9rem;margin:0;">Si proporcionas un correo se crea una cuenta para el tutor (padre/madre) con una contraseña temporal. Podrá ver el expediente, el historial de consultas y solicitar citas.</p>
+      </div>
+      <div class="form-group">
+        <label>Correo electrónico del tutor</label>
+        <input type="email" id="tutorEmail" class="form-control" placeholder="ej. madre@correo.com">
+        <p style="color:var(--text-light);font-size:0.85rem;margin-top:0.4rem;">Deja vacío si no deseas crear acceso de tutor ahora.</p>
+      </div>`;
   }
+
+  // Renderizar relaciones de family history después de next tick
+  setTimeout(() => {
+    window.familyHistoryData.forEach(r => {
+      const safeId = r.condition.replace(/[\s/()]/g,'_');
+      const container = document.getElementById('fh-rel-' + safeId);
+      if (container && container.innerHTML === '') renderFHRelatives(r.condition);
+    });
+  }, 0);
 
   return `
     <div class="onboarding-view animate-fade-in">
       <div class="onboarding-header">
-        <h1 style="font-size:2rem;margin-bottom:0.5rem;">Crear Perfil del Bebé</h1>
-        <p style="color:var(--text-light);font-size:1.1rem;margin-bottom:2rem;">Paso ${currentOnboardingStep} de ${totalSteps}: <strong style="color:var(--primary);">${stepTitles[currentOnboardingStep-1]}</strong></p>
+        <div style="display:flex;align-items:center;gap:0.8rem;margin-bottom:0.5rem;">
+          <div style="width:42px;height:42px;background:var(--primary);border-radius:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+            <i class="fa-solid ${stepIcons[currentOnboardingStep-1]}" style="color:white;font-size:1.1rem;"></i>
+          </div>
+          <h1 style="font-size:1.8rem;margin:0;">${stepTitles[currentOnboardingStep-1]}</h1>
+        </div>
+        <p style="color:var(--text-light);font-size:0.95rem;margin-bottom:1.5rem;">Paso ${currentOnboardingStep} de ${totalSteps}</p>
         <div class="progress-bar-container"><div class="progress-bar" style="width:${(currentOnboardingStep/totalSteps)*100}%"></div></div>
+        <div style="display:flex;gap:0.3rem;margin-top:0.6rem;">
+          ${Array.from({length:totalSteps},(_,i)=>`<div style="flex:1;height:4px;border-radius:2px;background:${i<currentOnboardingStep?'var(--primary)':'#e2e8f0'};transition:background 0.3s;"></div>`).join('')}
+        </div>
       </div>
       <div class="onboarding-content">${content}</div>
       <div class="onboarding-footer">
@@ -1111,7 +1396,7 @@ function renderOnboarding() {
         </button>
         ${currentOnboardingStep < totalSteps
           ? `<button class="btn btn-primary" onclick="nextOnboardingStep()">Siguiente <i class="fa-solid fa-arrow-right"></i></button>`
-          : `<button class="btn btn-primary" style="background-color:var(--secondary);color:var(--text-dark);" onclick="finishOnboarding()">Finalizar y Guardar <i class="fa-solid fa-check"></i></button>`}
+          : `<button class="btn btn-primary" style="background-color:var(--secondary);color:var(--text-dark);" onclick="finishOnboarding()"><i class="fa-solid fa-check"></i> Guardar Expediente</button>`}
       </div>
     </div>
   `;
@@ -1142,40 +1427,52 @@ function calculateAgeString(birthDateStr) {
 
 function formatLabel(key) {
   const known = {
-    'new-patient-name':'Nombre del Bebé','Ej. María Gómez':'Nombre de la Madre','Ej. Carlos Pérez':'Nombre del Padre',
-    'Ej. 39':'Semanas de Gestación','tipoParto':'Tipo de Parto','lloroNacer':'Lloró al nacer','apgarScore':'Apgar',
-    'Peso':'Peso al nacer (kg)','Talla':'Talla al nacer (cm)','PC':'Perímetro Cefálico (cm)',
-    'fueACasa':'Se fue a casa','ictericia':'Presentó Ictericia','Detallar familiares y enfermedades...':'Antecedentes Familiares',
-    'Estatura Mamá':'Estatura Mamá (cm)','Estatura Papá':'Estatura Papá (cm)',
-    'tamiz_metabolico':'Tamiz Metabólico','tamiz_auditivo':'Tamiz Auditivo','tamiz_cardiaco':'Tamiz Cardiaco',
-    'tamiz_visual':'Tamiz Visual','tamiz_ortopedico':'Tamiz Ortopédico',
-    'dolorPecho':'Dolor al amamantar','Sí / No, frecuencia...':'Regurgita','Ej. 6':'Pañales (24h)',
-    'Ej. 3 veces, amarillo mostaza, aguada...':'Evacuaciones','Ej. Sí, por las tardes llora mucho...':'Cólicos',
-    '¿En dónde está durmiendo el bebé?':'Lugar para dormir','¿En qué posición lo acuestas para dormir?':'Posición al dormir',
-    'objetosCuna':'Objetos en cuna','Ej. 2h de día, 4h de noche...':'Horas de sueño','fumaCasa':'Fuman en casa',
-    'fijaMirada':'Fija la mirada','sustoRuidos':'Se asusta con ruidos','calmaVoz':'Se calma con voz','levantaCabeza':'Levanta cabeza',
-    'Ej. Llanto fuerte, se calma al mecerlo...':'Llanto y métodos','Ej. Muy cansados pero felices...':'Estado emocional',
-    'Ej. NAN 1, Similac...':'Fórmula','Ninguna':'Complicaciones embarazo','Ninguno':'Medicamentos embarazo'
+    // v3 (Fase A)
+    'new-patient-name':'Nombre','patient-birth-date':'Fecha de nacimiento','patient-birth-state':'Estado de nacimiento',
+    'patient-birth-city':'Ciudad/Municipio','mom-name':'Nombre de la madre','dad-name':'Nombre del padre','patient-curp':'CURP',
+    'mom-education':'Escolaridad mamá','dad-education':'Escolaridad papá','mom-occupation':'Ocupación mamá','dad-occupation':'Ocupación papá',
+    'siblings-count':'Hermanos mayores','housing-type':'Tipo de vivienda','pets':'Mascotas en casa','smokers-home':'Fumadores en hogar',
+    'maternal-age':'Edad materna (años)','gesta-num':'Número de gestación','prenatal-ctrl':'Control prenatal','prenatal-visits':'Consultas prenatales',
+    'tobacco-preg':'Tabaquismo durante embarazo','alcohol-preg':'Alcohol durante embarazo','torch':'Infecciones TORCH','obstetric-comp':'Complicaciones obstétricas',
+    'delivery-type':'Tipo de parto','gestational-weeks':'Semanas de gestación','birth-weight-kg':'Peso al nacer (kg)',
+    'birth-height-cm':'Talla al nacer (cm)','birth-head-cm':'PC al nacer (cm)',
+    'apgar-1':'Apgar 1 min','apgar-5':'Apgar 5 min','nicu-stay':'UCI neonatal','nicu-days':'Días en UCI','phototherapy':'Fototerapia',
+    'neonatal-screening':'Tamiz neonatal','breastfed':'Lactancia materna','breastfed-months':'Meses de lactancia',
+    'feeding-type':'Tipo de alimentación','known-allergies':'Alergias conocidas','prev-surgery':'Cirugías previas',
+    'surgery-detail':'Detalle cirugías','prev-hosp':'Hospitalizaciones','hosp-detail':'Detalle hospitalizaciones','chronic-meds':'Medicamentos crónicos',
+    // Legado (v2)
+    'Fecha de nacimiento':'Fecha de nacimiento','Sexo':'Sexo','tipoParto':'Tipo de parto','apgarScore':'Apgar',
+    'Peso':'Peso al nacer (kg)','Talla':'Talla al nacer (cm)','PC':'PC al nacer (cm)',
   };
   if (known[key]) return known[key];
-  return key.replace(/^Ej\.\s*/i,'').replace(/[:?¿]/g,'').trim().replace(/([A-Z])/g,' $1').replace(/^\w/,c=>c.toUpperCase());
+  return key.replace(/^Ej\.\s*/i,'').replace(/[-_]/g,' ').replace(/[:?¿]/g,'').trim().replace(/^\w/,c=>c.toUpperCase());
 }
 
 function categorizeOnboardingData(data) {
-  const cats = {'Datos Generales y Nacimiento':[],'Antecedentes Familiares':[],'Primeros Estudios y Vacunas':[],'Alimentación':[],'Digestión (Pañales)':[],'Sueño y Seguridad':[],'Desarrollo y Sentidos':[],'Otros Registros':[]};
-  const map = {
-    'new-patient-name':1,'Ej. María Gómez':1,'Ej. Carlos Pérez':1,'Ej. 39':1,'tipoParto':1,'lloroNacer':1,'apgarScore':1,'Peso':1,'Talla':1,'PC':1,'fueACasa':1,'ictericia':1,'Ninguna':1,'Ninguno':1,'Fecha de nacimiento':1,
-    'Detallar familiares y enfermedades...':2,'Estatura Mamá':2,'Estatura Papá':2,
-    'tamiz_metabolico':3,'tamiz_auditivo':3,'tamiz_cardiaco':3,'tamiz_visual':3,'tamiz_ortopedico':3,
-    '¿Qué está comiendo actualmente el bebé?':4,'Ej. A libre demanda, cada 2 horas...':4,'Ej. 15 minutos por pecho...':4,'dolorPecho':4,'Ej. Problemas de agarre, uso de pezoneras...':4,'Ej. NAN 1, Similac...':4,
-    'Sí / No, frecuencia...':5,'Ej. 6':5,'Ej. 3 veces, amarillo mostaza, aguada...':5,'Ej. Sí, por las tardes llora mucho...':5,
-    '¿En dónde está durmiendo el bebé?':6,'¿En qué posición lo acuestas para dormir?':6,'objetosCuna':6,'Ej. 2h de día, 4h de noche...':6,'fumaCasa':6,
-    'fijaMirada':7,'sustoRuidos':7,'calmaVoz':7,'levantaCabeza':7,'Ej. Llanto fuerte, se calma al mecerlo...':7,'Ej. Muy cansados pero felices...':7
+  // Categorías v3 (Fase A)
+  const cats = {
+    'Ficha de Identificación':[],
+    'Contexto Familiar':[],
+    'Antecedentes Prenatales':[],
+    'Datos Perinatales':[],
+    'Antecedentes Personales':[],
+    'Otros Registros':[]
   };
-  const titles = ['Otros Registros','Datos Generales y Nacimiento','Antecedentes Familiares','Primeros Estudios y Vacunas','Alimentación','Digestión (Pañales)','Sueño y Seguridad','Desarrollo y Sentidos'];
-  Object.entries(data).forEach(([k,v]) => {
-    if (!v || (typeof v === 'string' && v.trim() === '')) return;
-    cats[titles[map[k]||0]].push({key:k, value:v});
+  const map = {
+    'new-patient-name':1,'patient-birth-date':1,'Sexo':1,'patient-birth-state':1,'patient-birth-city':1,'mom-name':1,'dad-name':1,'patient-curp':1,
+    'mom-education':2,'dad-education':2,'mom-occupation':2,'dad-occupation':2,'siblings-count':2,'housing-type':2,'pets':2,'smokers-home':2,
+    'maternal-age':3,'gesta-num':3,'prenatal-ctrl':3,'prenatal-visits':3,'tobacco-preg':3,'alcohol-preg':3,'torch':3,'obstetric-comp':3,
+    'delivery-type':4,'gestational-weeks':4,'birth-weight-kg':4,'birth-height-cm':4,'birth-head-cm':4,'apgar-1':4,'apgar-5':4,'nicu-stay':4,'nicu-days':4,'phototherapy':4,'neonatal-screening':4,
+    'breastfed':5,'breastfed-months':5,'feeding-type':5,'known-allergies':5,'prev-surgery':5,'surgery-detail':5,'prev-hosp':5,'hosp-detail':5,'chronic-meds':5,
+    // Legado (expedientes anteriores)
+    'Fecha de nacimiento':1,'tipoParto':4,'apgarScore':4,'Peso':4,'Talla':4,'PC':4,
+  };
+  const titles = ['Otros Registros','Ficha de Identificación','Contexto Familiar','Antecedentes Prenatales','Datos Perinatales','Antecedentes Personales'];
+  Object.entries(data).forEach(([k, v]) => {
+    if (!v || (typeof v === 'string' && v.trim() === '') || k === 'tutorEmail') return;
+    const catIdx = map[k] || 0;
+    const catName = titles[catIdx];
+    if (cats[catName]) cats[catName].push({ key: k, value: v });
   });
   return cats;
 }
@@ -1564,37 +1861,28 @@ window.updateAppointmentStatus = async function(id, status) {
 function validateCurrentStep() {
   const container = document.querySelector('.onboarding-content');
   if (!container) return true;
-  const elements = container.querySelectorAll('input, select, textarea');
+  // Solo valida campos marcados con required="true" o required attribute
+  const elements = container.querySelectorAll('input[required], select[required], textarea[required]');
   let isValid = true, firstInvalid = null;
-  const radioGroups = {}, checkboxGroups = {};
+  const radioGroups = {};
   elements.forEach(el => {
     if (el.closest('[style*="display: none"]') || el.closest('[style*="display:none"]')) return;
     el.style.borderColor = '';
-    const lbl = el.closest('label'); if(lbl) lbl.style.color='';
     if (el.type === 'radio') {
       if (!radioGroups[el.name]) radioGroups[el.name] = [];
       radioGroups[el.name].push(el);
-    } else if (el.type === 'checkbox') {
-      const pg = el.closest('div[style*="grid-template-columns: 1fr 1fr"]') || el.closest('div[style*="grid-template-columns:1fr 1fr"]');
-      if (pg) { const k = 'cbg_'+pg.offsetTop; if(!checkboxGroups[k]) checkboxGroups[k]=[]; checkboxGroups[k].push(el); }
     } else if (!el.value || el.value.trim() === '') {
-      isValid = false; el.style.borderColor='#ef4444';
+      isValid = false; el.style.borderColor = '#ef4444';
       if (!firstInvalid) firstInvalid = el;
     }
   });
   Object.values(radioGroups).forEach(g => {
     if (!g.some(r => r.checked)) {
-      isValid = false; g.forEach(r => { const l=r.closest('label'); if(l) l.style.color='#ef4444'; });
+      isValid = false; g.forEach(r => { const l = r.closest('label'); if (l) l.style.color = '#ef4444'; });
       if (!firstInvalid) firstInvalid = g[0];
     }
   });
-  Object.values(checkboxGroups).forEach(g => {
-    if (!g.some(c => c.checked)) {
-      isValid = false; g.forEach(c => { const l=c.closest('label'); if(l) l.style.color='#ef4444'; });
-      if (!firstInvalid) firstInvalid = g[0];
-    }
-  });
-  if (!isValid) { alert('Por favor responde todas las preguntas visibles.'); if(firstInvalid?.focus) firstInvalid.focus(); }
+  if (!isValid) { alert('Por favor completa los campos obligatorios (marcados con *).'); if (firstInvalid?.focus) firstInvalid.focus(); }
   return isValid;
 }
 
@@ -1619,7 +1907,7 @@ window.nextOnboardingStep = function() {
     const n = document.getElementById('new-patient-name');
     if (n && n.value) window.newPatientName = n.value;
   }
-  if (currentOnboardingStep < 7) { currentOnboardingStep++; renderApp(); window.scrollTo(0,0); }
+  if (currentOnboardingStep < 7) { currentOnboardingStep++; renderApp(); window.scrollTo(0, 0); }
 };
 
 window.prevOnboardingStep = function() {
@@ -1629,30 +1917,51 @@ window.prevOnboardingStep = function() {
 window.finishOnboarding = async function() {
   if (!validateCurrentStep()) return;
   saveCurrentStepData();
-  const newName    = window.newPatientName || 'Bebé Nuevo';
-  const tutorEmail = window.newPatientData['tutorEmail'];
-  const momName    = window.newPatientData['Ej. María Gómez'] || 'No especificado';
-  const dadName    = window.newPatientData['Ej. Carlos Pérez'] || 'No especificado';
+  const d        = window.newPatientData || {};
+  const newName  = window.newPatientName || d['new-patient-name'] || 'Paciente';
+  const momName  = d['mom-name'] || 'No especificado';
+  const dadName  = d['dad-name'] || 'No especificado';
+  const tutorEmail = d['tutorEmail'];
   const tutorName  = momName !== 'No especificado' ? momName : (dadName !== 'No especificado' ? dadName : 'Tutor');
+
+  // Colectar TORCH (checkboxes)
+  const torchChecked = Array.from(document.querySelectorAll('input[name="torch"]:checked')).map(e => e.value);
+
   try {
     const result = await API.post('/patients', {
-      name: newName,
-      onboarding_data: window.newPatientData,
-      tutor_email: tutorEmail || undefined,
-      tutor_name:  tutorName
+      name:            newName,
+      onboarding_data: d,
+      tutor_email:     tutorEmail || undefined,
+      tutor_name:      tutorName,
+      family_history:  window.familyHistoryData || [],
+      // Fase A: campos estructurados
+      birth_state:     d['patient-birth-state'] || undefined,
+      birth_city:      d['patient-birth-city']  || undefined,
+      parents_education: (d['mom-education'] || d['dad-education']) ? { mother: d['mom-education'], father: d['dad-education'] } : undefined,
+      maternal_age:    d['maternal-age'] || undefined,
+      prenatal_visits: d['prenatal-visits'] || undefined,
+      gestational_age: d['gestational-weeks'] || undefined,
+      delivery_type:   d['delivery-type'] || undefined,
+      birth_weight:    d['birth-weight-kg'] || undefined,
+      birth_height:    d['birth-height-cm'] || undefined,
+      birth_head_circ: d['birth-head-cm']   || undefined,
+      apgar_1:         d['apgar-1'] || undefined,
+      apgar_5:         d['apgar-5'] || undefined,
+      nicu_stay:       d['nicu-stay'] === 'Sí' ? 1 : 0,
+      nicu_days:       d['nicu-days'] || undefined,
+      breastfed:       d['breastfed'] === 'Sí' ? 1 : 0,
+      breastfed_months: d['breastfed-months'] || undefined,
+      torch_exposure:  torchChecked.length ? torchChecked : undefined,
+      neonatal_screening: d['neonatal-screening'] === 'Sí' ? 1 : 0,
     });
     patients = (await API.get('/patients')) || [];
-    window.successData = {
-      patientName: newName,
-      tutorEmail,
-      password: result.tutor?.password || '',
-      momName, dadName
-    };
+    window.successData = { patientName: newName, tutorEmail, password: result.tutor?.password || '', momName, dadName };
     currentOnboardingStep = 1;
     window.newPatientName = '';
     window.newPatientData = {};
+    window.familyHistoryData = [];
     currentView = 'onboarding-success';
-    renderApp(); window.scrollTo(0,0);
+    renderApp(); window.scrollTo(0, 0);
   } catch (e) { alert('Error creando paciente: ' + e.message); }
 };
 
