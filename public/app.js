@@ -224,6 +224,40 @@ function renderDoctorDashboard() {
   const q = patientSearchQuery.toLowerCase();
   const visiblePatients = q ? patients.filter(p => p.name.toLowerCase().includes(q)) : patients;
 
+  // Próximas visitas en los próximos 7 días o vencidas
+  const today = new Date().toISOString().slice(0, 10);
+  const upcomingPatients = patients.filter(p => {
+    if (!p.next_visit_date) return false;
+    const daysLeft = Math.round((new Date(p.next_visit_date) - new Date(today)) / 86_400_000);
+    return daysLeft <= 7; // incluye vencidas (daysLeft < 0) y las del próximo semana
+  }).sort((a, b) => a.next_visit_date.localeCompare(b.next_visit_date));
+
+  const upcomingSection = upcomingPatients.length > 0 ? `
+    <div style="background:white;padding:1.5rem;border-radius:15px;margin-bottom:2rem;box-shadow:var(--card-shadow);">
+      <h2 style="margin-bottom:1rem;display:flex;align-items:center;gap:0.5rem;">
+        <i class="fa-solid fa-bell" style="color:#f59e0b;font-size:1.1rem;"></i> Visitas Próximas
+        <span style="font-size:0.8rem;color:var(--text-light);font-weight:400;margin-left:0.25rem;">(próximos 7 días)</span>
+      </h2>
+      <div style="display:flex;flex-direction:column;gap:0.5rem;">
+        ${upcomingPatients.map(p => {
+          const daysLeft = Math.round((new Date(p.next_visit_date) - new Date(today)) / 86_400_000);
+          const dateLabel = new Date(p.next_visit_date + 'T12:00:00').toLocaleDateString('es-ES', { weekday:'short', day:'numeric', month:'short' });
+          const isOverdue = daysLeft < 0;
+          const bgColor = isOverdue ? '#fef2f2' : daysLeft === 0 ? '#fff7ed' : '#f0fdf4';
+          const color   = isOverdue ? '#ef4444' : daysLeft === 0 ? '#f59e0b' : '#16a34a';
+          const label   = isOverdue ? `Vencida hace ${Math.abs(daysLeft)} día(s)` : daysLeft === 0 ? 'Hoy' : `En ${daysLeft} día(s) — ${dateLabel}`;
+          return `
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:0.6rem 0.9rem;background:${bgColor};border-radius:8px;flex-wrap:wrap;gap:0.5rem;cursor:pointer;" onclick="viewPatient(${p.id})">
+            <div style="display:flex;align-items:center;gap:0.7rem;">
+              <div style="width:32px;height:32px;border-radius:50%;background:var(--primary-light);display:flex;align-items:center;justify-content:center;font-weight:700;color:var(--primary);">${p.name.charAt(0).toUpperCase()}</div>
+              <span style="font-weight:600;">${p.name}</span>
+            </div>
+            <span style="font-size:0.85rem;color:${color};font-weight:500;"><i class="fa-solid fa-calendar-check"></i> ${label}</span>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>` : '';
+
   const visibleAppts = todayAppointments.filter(a => a.status !== 'cancelada');
   const apptSection = visibleAppts.length > 0 ? `
     <div style="background:white;padding:1.5rem;border-radius:15px;margin-bottom:2rem;box-shadow:var(--card-shadow);">
@@ -245,11 +279,19 @@ function renderDoctorDashboard() {
     </div>` : '';
 
   const patientsHtml = visiblePatients.length > 0
-    ? visiblePatients.map(p => `
+    ? visiblePatients.map(p => {
+      const nvd = p.next_visit_date;
+      let nvBadge = '';
+      if (nvd) {
+        const dLeft = Math.round((new Date(nvd) - new Date(today)) / 86_400_000);
+        if (dLeft < 0)      nvBadge = `<span style="font-size:0.72rem;background:#fef2f2;color:#ef4444;border-radius:4px;padding:0.15rem 0.4rem;margin-left:0.3rem;"><i class="fa-solid fa-triangle-exclamation"></i> Visita vencida</span>`;
+        else if (dLeft <= 7) nvBadge = `<span style="font-size:0.72rem;background:#fff7ed;color:#f59e0b;border-radius:4px;padding:0.15rem 0.4rem;margin-left:0.3rem;"><i class="fa-solid fa-bell"></i> Visita en ${dLeft}d</span>`;
+      }
+      return `
       <div class="patient-card" onclick="viewPatient(${p.id})">
         <div class="avatar">${p.name.charAt(0).toUpperCase()}</div>
         <div class="patient-info">
-          <h3>${p.name}</h3>
+          <h3>${p.name}${nvBadge}</h3>
           <p><i class="fa-regular fa-clock"></i> ${calculateAgeString(p.birth_date || (p.onboarding_data && p.onboarding_data['Fecha de nacimiento']))}</p>
           <div style="margin-top:0.5rem;display:flex;gap:1rem;font-size:0.8rem;font-weight:500;">
             <span><i class="fa-solid fa-weight-scale" style="color:var(--secondary)"></i> ${p.weight} kg</span>
@@ -257,7 +299,8 @@ function renderDoctorDashboard() {
           </div>
         </div>
         <i class="fa-solid fa-chevron-right" style="margin-left:auto;color:var(--text-light);"></i>
-      </div>`).join('')
+      </div>`;
+    }).join('')
     : `<div style="text-align:center;padding:3rem;background:white;border-radius:15px;grid-column:1/-1;">
         <i class="fa-solid fa-folder-open" style="font-size:3rem;color:var(--primary-light);margin-bottom:1rem;"></i>
         <h3>${q ? 'Sin resultados' : 'Aún no tienes pacientes'}</h3>
@@ -277,6 +320,7 @@ function renderDoctorDashboard() {
         </div>
       </div>
       ${apptSection}
+      ${upcomingSection}
       <div style="margin-bottom:1.5rem;">
         <input type="text" class="form-control" placeholder="🔍 Buscar paciente por nombre..." value="${patientSearchQuery}" oninput="filterPatients(this.value)" style="max-width:400px;">
       </div>
@@ -335,6 +379,18 @@ function renderParentProfile() {
               <div class="metric"><i class="fa-solid fa-ruler-vertical"></i> ${h.height} cm</div>
               ${h.head_circ ? `<div class="metric"><i class="fa-solid fa-head-side-measles" style="color:var(--secondary)"></i> ${h.head_circ} cm</div>` : ''}
             </div>
+            ${h.next_visit_date ? (() => {
+              const today = new Date().toISOString().slice(0, 10);
+              const daysLeft = Math.round((new Date(h.next_visit_date) - new Date(today)) / 86_400_000);
+              const dateLabel = new Date(h.next_visit_date + 'T12:00:00').toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' });
+              const isOverdue = daysLeft < 0;
+              const isSoon    = daysLeft >= 0 && daysLeft <= 7;
+              const color  = isOverdue ? '#ef4444' : isSoon ? '#f59e0b' : '#64748b';
+              const bgColor= isOverdue ? '#fef2f2' : isSoon ? '#fffbeb' : '#f8fafc';
+              const icon   = isOverdue ? 'fa-triangle-exclamation' : 'fa-calendar-check';
+              const label  = isOverdue ? `Venció hace ${Math.abs(daysLeft)} días` : daysLeft === 0 ? 'Próxima visita: hoy' : `Próxima visita: ${dateLabel}`;
+              return `<div style="margin-top:0.6rem;padding:0.4rem 0.8rem;background:${bgColor};border-radius:6px;font-size:0.8rem;color:${color};display:inline-flex;align-items:center;gap:0.4rem;"><i class="fa-solid ${icon}"></i> ${label}</div>`;
+            })() : ''}
           </div>
         </div>`;
       }).join('')
@@ -366,6 +422,20 @@ function renderParentProfile() {
         <div class="stat-card"><div class="stat-label">Peso Actual</div><div class="stat-value">${p.weight||0} <span style="font-size:1.2rem;color:var(--text-dark)">kg</span></div><p style="color:var(--secondary);font-size:0.9rem;"><i class="fa-solid fa-arrow-trend-up"></i> Actualizado</p></div>
         <div class="stat-card"><div class="stat-label">Estatura</div><div class="stat-value">${p.height||0} <span style="font-size:1.2rem;color:var(--text-dark)">cm</span></div><p style="color:var(--secondary);font-size:0.9rem;"><i class="fa-solid fa-arrow-trend-up"></i> Actualizado</p></div>
         <div class="stat-card"><div class="stat-label">Consultas</div><div class="stat-value">${consultations.length} <span style="font-size:1.2rem;color:var(--text-dark)">total</span></div><p style="color:var(--text-light);font-size:0.9rem;">Registradas</p></div>
+        ${(() => {
+          const lastConsult = consultations.find(c => c.next_visit_date);
+          if (!lastConsult) return '';
+          const nvd = lastConsult.next_visit_date;
+          const today = new Date().toISOString().slice(0, 10);
+          const daysLeft = Math.round((new Date(nvd) - new Date(today)) / 86_400_000);
+          const dateLabel = new Date(nvd + 'T12:00:00').toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' });
+          const isOverdue = daysLeft < 0;
+          const isSoon = daysLeft >= 0 && daysLeft <= 7;
+          const color = isOverdue ? '#ef4444' : isSoon ? '#f59e0b' : 'var(--secondary)';
+          const icon  = isOverdue ? 'fa-triangle-exclamation' : isSoon ? 'fa-bell' : 'fa-calendar-check';
+          const label = isOverdue ? `Hace ${Math.abs(daysLeft)} días` : daysLeft === 0 ? 'Hoy' : `En ${daysLeft} días`;
+          return `<div class="stat-card"><div class="stat-label">Próxima Visita</div><div class="stat-value" style="font-size:1.1rem;color:${color};">${dateLabel}</div><p style="color:${color};font-size:0.9rem;"><i class="fa-solid ${icon}"></i> ${label}</p></div>`;
+        })()}
       </div>
 
       <div class="charts-section">

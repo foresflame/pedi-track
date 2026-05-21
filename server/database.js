@@ -82,8 +82,17 @@ function seedDefaultUsers() {
   console.log('✓ Usuarios de prueba creados (admin, pediatra, tutor)');
 }
 
+function runMigrations() {
+  // Fase F: próxima visita sugerida en consultas
+  try {
+    db.prepare('ALTER TABLE consultations ADD COLUMN next_visit_date TEXT').run();
+    console.log('✓ Migración: columna next_visit_date agregada');
+  } catch (e) { /* columna ya existe */ }
+}
+
 function initDB() {
   db.exec(SCHEMA);
+  runMigrations();
   seedDefaultUsers();
   console.log('✓ Base de datos inicializada');
 }

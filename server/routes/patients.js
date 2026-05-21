@@ -10,7 +10,10 @@ router.use(requireAuth);
 
 const WITH_DOCTOR = `
   SELECT p.*, u.name as doctor_name, u.email as doctor_email,
-         t.name as tutor_name, t.email as tutor_email
+         t.name as tutor_name, t.email as tutor_email,
+         (SELECT next_visit_date FROM consultations
+          WHERE patient_id = p.id AND next_visit_date IS NOT NULL
+          ORDER BY created_at DESC LIMIT 1) AS next_visit_date
   FROM patients p
   LEFT JOIN users u ON u.id = p.doctor_id
   LEFT JOIN users t ON t.id = p.tutor_id

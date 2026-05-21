@@ -11,6 +11,34 @@ function parseConsult(c) {
   return { ...c, medications: c.medications ? JSON.parse(c.medications) : [] };
 }
 
+/**
+ * Calcula la fecha sugerida de próxima visita según la edad del paciente.
+ * Frecuencia basada en lineamientos AAP / NOM-031.
+ * @param {string} birthDateStr  — 'YYYY-MM-DD'
+ * @param {string} [consultDateStr] — 'YYYY-MM-DD' (default: hoy)
+ * @returns {string|null} 'YYYY-MM-DD'
+ */
+function suggestNextVisit(birthDateStr, consultDateStr) {
+  if (!birthDateStr) return null;
+  const birth   = new Date(birthDateStr);
+  const consult = consultDateStr ? new Date(consultDateStr) : new Date();
+  if (isNaN(birth.getTime())) return null;
+
+  const ageInDays = Math.floor((consult - birth) / 86_400_000);
+
+  let daysToAdd;
+  if      (ageInDays <  61)  daysToAdd = 14;   // < 2 meses  → 2 semanas
+  else if (ageInDays < 184)  daysToAdd = 30;   // 2-6 meses  → 1 mes
+  else if (ageInDays < 366)  daysToAdd = 60;   // 6-12 meses → 2 meses
+  else if (ageInDays < 731)  daysToAdd = 90;   // 1-2 años   → 3 meses
+  else if (ageInDays < 1826) daysToAdd = 180;  // 2-5 años   → 6 meses
+  else                       daysToAdd = 365;  // 5+ años    → 12 meses
+
+  const next = new Date(consult);
+  next.setDate(next.getDate() + daysToAdd);
+  return next.toISOString().slice(0, 10);
+}
+
 function canAccessPatient(user, patient) {
   if (user.role === 'admin') return true;
   if (user.role === 'pediatra') return patient.doctor_id === user.id;
@@ -42,11 +70,13 @@ router.post('/', requireRole('admin', 'pediatra'), (req, res) => {
   const { date, type, weight, height, head_circ, notes, medications } = req.body;
   if (!weight || !height) return res.status(400).json({ error: 'Peso y estatura son requeridos' });
 
-  const dateStr = date || new Date().toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' });
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const dateStr  = date || new Date().toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' });
+  const nextVisit = suggestNextVisit(patient.birth_date, todayIso);
 
   const result = db.prepare(`
-    INSERT INTO consultations (patient_id, doctor_id, date, type, weight, height, head_circ, notes, medications)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO consultations (patient_id, doctor_id, date, type, weight, height, head_circ, notes, medications, next_visit_date)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     patientId,
     req.user.id,
@@ -56,7 +86,8 @@ router.post('/', requireRole('admin', 'pediatra'), (req, res) => {
     parseFloat(height),
     head_circ ? parseFloat(head_circ) : null,
     notes || '',
-    medications ? JSON.stringify(medications) : null
+    medications ? JSON.stringify(medications) : null,
+    nextVisit
   );
 
   // Actualizar peso y talla del paciente con la consulta más reciente
