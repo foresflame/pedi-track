@@ -26,7 +26,8 @@ let patients        = [];
 let pediatricians   = [];
 let currentPatient  = null;
 let consultations   = [];
-let patientVaccinations = [];
+let patientVaccinations  = [];
+let neuroAssessments     = [];
 let todayAppointments = [];
 let currentPatientId  = null;
 let currentView     = 'login';
@@ -68,6 +69,7 @@ async function refreshData() {
         currentPatientId = p.id;
         consultations       = (await API.get(`/patients/${p.id}/consultations`)) || [];
         patientVaccinations = (await API.get(`/patients/${p.id}/vaccinations`)) || [];
+        neuroAssessments    = (await API.get(`/patients/${p.id}/neurodevelopment`)) || [];
         tutorAppointments   = (await API.get('/appointments')) || [];
       }
     } else {
@@ -543,6 +545,8 @@ function renderParentProfile() {
 
       ${renderVaccineSection()}
 
+      ${renderNeuroSection()}
+
       ${(p.onboarding_data && Object.keys(p.onboarding_data).length > 0) || (p.family_history && p.family_history.length > 0) || p.delivery_type ? `
       <div class="history-section" style="margin-top:2rem;">
         <h2 style="margin-bottom:2rem;font-size:1.8rem;border-bottom:2px solid var(--primary-light);padding-bottom:0.5rem;">Expediente de Ingreso</h2>
@@ -744,6 +748,202 @@ window.unapplyVaccine = async function(id) {
     const pid = currentPatientId || currentPatient?.id;
     await API.put(`/patients/${pid}/vaccinations/${id}/unapply`, {});
     patientVaccinations = (await API.get(`/patients/${pid}/vaccinations`)) || [];
+    renderApp();
+  } catch (e) { alert(e.message); }
+};
+
+// ── Neurodesarrollo Section ────────────────────────────────────────────────
+const DOMAIN_LABELS = { PS:'Personal-Social', MF:'Motor Fino', LJ:'Lenguaje', MG:'Motor Grueso' };
+const DOMAIN_ICONS  = { PS:'fa-users',        MF:'fa-hand',    LJ:'fa-comments', MG:'fa-person-running' };
+const RISK_CFG = {
+  bajo:     { label:'Bajo riesgo',    bg:'#dcfce7', color:'#16a34a', icon:'fa-circle-check'          },
+  moderado: { label:'Riesgo moderado',bg:'#fef9c3', color:'#ca8a04', icon:'fa-triangle-exclamation'  },
+  alto:     { label:'Riesgo alto',    bg:'#fee2e2', color:'#dc2626', icon:'fa-circle-exclamation'    },
+};
+
+function renderNeuroSection() {
+  const canEdit = currentUser?.role !== 'tutor';
+  const p = currentPatient;
+  const birthDate = p?.birth_date;
+  const ageMonths = birthDate
+    ? Math.floor((new Date() - new Date(birthDate + 'T12:00:00')) / (30.44 * 86400000))
+    : null;
+  const showMchat = ageMonths !== null && ageMonths >= 16 && ageMonths <= 30;
+
+  const historyHtml = neuroAssessments.length > 0
+    ? neuroAssessments.map(a => {
+        const cfg    = RISK_CFG[a.risk_level] || RISK_CFG.bajo;
+        const alarms = Array.isArray(a.alarms) ? a.alarms : [];
+        const typeLabel = a.type === 'denver' ? 'Denver II' : 'M-CHAT-R/F';
+        const typeIcon  = a.type === 'denver' ? 'fa-clipboard-list' : 'fa-brain';
+        const dateLabel = new Date(a.date + 'T12:00:00').toLocaleDateString('es-MX', { day:'numeric', month:'short', year:'numeric' });
+        const scoreLabel = a.type === 'denver'
+          ? `${a.score}% hitos cumplidos`
+          : `${a.score} ${a.score === 1 ? 'ítem fallado' : 'ítems fallados'}`;
+        return `
+        <div style="background:white;border-radius:12px;padding:1rem 1.2rem;box-shadow:var(--card-shadow);border-left:4px solid ${cfg.color};margin-bottom:0.8rem;">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:0.5rem;">
+            <div style="display:flex;align-items:center;gap:0.75rem;">
+              <div style="background:${cfg.bg};border-radius:8px;padding:0.5rem;"><i class="fa-solid ${typeIcon}" style="color:${cfg.color};font-size:1.1rem;"></i></div>
+              <div>
+                <div style="font-weight:600;">${typeLabel}</div>
+                <div style="font-size:0.82rem;color:var(--text-light);">${dateLabel} · ${ageMonths !== null ? a.age_months + ' meses' : ''}</div>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:0.6rem;flex-wrap:wrap;">
+              <span style="font-size:0.78rem;background:${cfg.bg};color:${cfg.color};padding:0.2rem 0.7rem;border-radius:20px;font-weight:600;">
+                <i class="fa-solid ${cfg.icon}" style="font-size:0.7rem;margin-right:0.3rem;"></i>${cfg.label}
+              </span>
+              <span style="font-size:0.78rem;color:var(--text-light);">${scoreLabel}</span>
+              ${canEdit ? `<button class="btn" style="padding:0.2rem 0.5rem;font-size:0.75rem;background:transparent;color:#ef4444;box-shadow:none;" onclick="deleteNeuro(${a.id})"><i class="fa-solid fa-trash"></i></button>` : ''}
+            </div>
+          </div>
+          ${alarms.length > 0 ? `
+          <div style="margin-top:0.7rem;padding:0.5rem 0.8rem;background:#fef2f2;border-radius:8px;">
+            <div style="font-size:0.78rem;font-weight:600;color:#dc2626;margin-bottom:0.3rem;"><i class="fa-solid fa-triangle-exclamation"></i> Señales de alarma:</div>
+            <ul style="margin:0;padding-left:1.2rem;font-size:0.78rem;color:#7f1d1d;">
+              ${alarms.map(al => `<li>${al}</li>`).join('')}
+            </ul>
+          </div>` : ''}
+          ${a.notes ? `<p style="margin-top:0.5rem;font-size:0.82rem;color:var(--text-light);font-style:italic;">"${a.notes}"</p>` : ''}
+        </div>`;
+      }).join('')
+    : `<p style="color:var(--text-light);font-size:0.9rem;">No hay evaluaciones registradas aún.</p>`;
+
+  return `
+  <div class="history-section" style="margin-top:2rem;">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.5rem;margin-bottom:1.2rem;">
+      <h2 style="margin:0;">Evaluación de Neurodesarrollo</h2>
+      ${canEdit && ageMonths !== null ? `
+      <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+        <button class="btn btn-primary" style="padding:0.4rem 1rem;font-size:0.85rem;" onclick="openNeuroScreener('denver',${ageMonths})">
+          <i class="fa-solid fa-clipboard-list"></i> Denver II
+        </button>
+        ${showMchat ? `<button class="btn" style="padding:0.4rem 1rem;font-size:0.85rem;background:#7c3aed;color:white;" onclick="openNeuroScreener('mchat',${ageMonths})">
+          <i class="fa-solid fa-brain"></i> M-CHAT-R/F
+        </button>` : ''}
+      </div>` : ''}
+    </div>
+    ${historyHtml}
+  </div>`;
+}
+
+// ── Neuro Screener State ───────────────────────────────────────────────────
+let _neuroScreenerType   = null;
+let _neuroScreenerAge    = 0;
+let _neuroItems          = [];
+let _neuroDomains        = {};
+let _neuroResponses      = {};
+
+window.openNeuroScreener = async function(type, ageMonths) {
+  _neuroScreenerType = type;
+  _neuroScreenerAge  = ageMonths;
+  _neuroResponses    = {};
+  try {
+    const pid = currentPatientId || currentPatient?.id;
+    const data = await API.get(`/patients/${pid}/neurodevelopment/items?type=${type}&ageMonths=${ageMonths}`);
+    _neuroItems   = data.items   || [];
+    _neuroDomains = data.domains || {};
+  } catch (e) { alert(e.message); return; }
+
+  renderNeuroScreenerModal();
+  openModal('neuroScreenerModal');
+};
+
+function renderNeuroScreenerModal() {
+  const type    = _neuroScreenerType;
+  const items   = _neuroItems;
+  const title   = type === 'denver' ? 'Denver II — Screener de Desarrollo' : 'M-CHAT-R/F — Detección de Autismo';
+  const subtitle = type === 'denver'
+    ? `${items.length} hitos para ${_neuroScreenerAge} meses de edad`
+    : `20 preguntas · Niños de 16 a 30 meses`;
+
+  let bodyHtml = '';
+  if (type === 'denver') {
+    const grouped = {};
+    for (const item of items) {
+      if (!grouped[item.domain]) grouped[item.domain] = [];
+      grouped[item.domain].push(item);
+    }
+    bodyHtml = Object.entries(grouped).map(([dom, domItems]) => `
+      <div style="margin-bottom:1.2rem;">
+        <div style="font-size:0.8rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--primary);margin-bottom:0.5rem;display:flex;align-items:center;gap:0.4rem;">
+          <i class="fa-solid ${DOMAIN_ICONS[dom]||'fa-circle'}"></i> ${DOMAIN_LABELS[dom]||dom}
+        </div>
+        ${domItems.map(item => `
+        <div style="display:flex;align-items:flex-start;gap:0.8rem;padding:0.6rem 0;border-bottom:1px solid #f1f5f9;">
+          <div style="flex:1;font-size:0.88rem;padding-top:0.1rem;">${item.text}
+            <span style="font-size:0.73rem;color:var(--text-light);margin-left:0.4rem;">(P90 a los ${item.age90}m)</span>
+          </div>
+          <div style="display:flex;gap:0.4rem;flex-shrink:0;">
+            <label style="cursor:pointer;display:flex;align-items:center;gap:0.25rem;font-size:0.82rem;">
+              <input type="radio" name="neuro_${item.id}" value="si" onchange="_neuroResponses['${item.id}']='si'"> Sí
+            </label>
+            <label style="cursor:pointer;display:flex;align-items:center;gap:0.25rem;font-size:0.82rem;">
+              <input type="radio" name="neuro_${item.id}" value="no" onchange="_neuroResponses['${item.id}']='no'"> No
+            </label>
+          </div>
+        </div>`).join('')}
+      </div>`).join('');
+  } else {
+    bodyHtml = items.map((item, idx) => `
+      <div style="padding:0.75rem 0;border-bottom:1px solid #f1f5f9;">
+        <div style="font-size:0.88rem;font-weight:500;margin-bottom:0.4rem;">
+          <span style="color:var(--text-light);margin-right:0.4rem;">${idx + 1}.</span>${item.text}
+          ${item.critical ? `<span style="font-size:0.7rem;background:#fef9c3;color:#ca8a04;padding:0.1rem 0.4rem;border-radius:10px;margin-left:0.4rem;">Crítico</span>` : ''}
+        </div>
+        <div style="display:flex;gap:0.8rem;">
+          <label style="cursor:pointer;display:flex;align-items:center;gap:0.3rem;padding:0.3rem 0.8rem;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;font-size:0.85rem;transition:all 0.15s;" onclick="this.style.background='#dcfce7'">
+            <input type="radio" name="mchat_${item.id}" value="si" onchange="_neuroResponses[${item.id}]='si'"> Sí
+          </label>
+          <label style="cursor:pointer;display:flex;align-items:center;gap:0.3rem;padding:0.3rem 0.8rem;background:#fef2f2;border:1px solid #fecaca;border-radius:6px;font-size:0.85rem;transition:all 0.15s;" onclick="this.style.background='#fee2e2'">
+            <input type="radio" name="mchat_${item.id}" value="no" onchange="_neuroResponses[${item.id}]='no'"> No
+          </label>
+        </div>
+      </div>`).join('');
+  }
+
+  const modalEl = document.getElementById('neuroScreenerModal');
+  if (modalEl) {
+    modalEl.querySelector('#neuroModalTitle').textContent    = title;
+    modalEl.querySelector('#neuroModalSubtitle').textContent = subtitle;
+    modalEl.querySelector('#neuroModalBody').innerHTML       = bodyHtml;
+    modalEl.querySelector('#neuroModalError').style.display  = 'none';
+  }
+}
+
+window.confirmNeuroScreener = async function() {
+  const total  = _neuroItems.length;
+  const answered = Object.keys(_neuroResponses).length;
+  const errEl  = document.getElementById('neuroModalError');
+  if (answered < total * 0.8) {
+    errEl.textContent = `Por favor responde al menos ${Math.ceil(total * 0.8)} de ${total} ítems.`;
+    errEl.style.display = 'block';
+    return;
+  }
+
+  const pid   = currentPatientId || currentPatient?.id;
+  const notes = document.getElementById('neuroModalNotes').value.trim();
+  try {
+    await API.post(`/patients/${pid}/neurodevelopment`, {
+      type:      _neuroScreenerType,
+      age_months: _neuroScreenerAge,
+      date:      new Date().toISOString().slice(0, 10),
+      responses: _neuroResponses,
+      notes,
+    });
+    closeModal('neuroScreenerModal');
+    neuroAssessments = (await API.get(`/patients/${pid}/neurodevelopment`)) || [];
+    renderApp();
+  } catch (e) { errEl.textContent = e.message; errEl.style.display = 'block'; }
+};
+
+window.deleteNeuro = async function(id) {
+  if (!confirm('¿Eliminar esta evaluación?')) return;
+  const pid = currentPatientId || currentPatient?.id;
+  try {
+    await API.del(`/patients/${pid}/neurodevelopment/${id}`);
+    neuroAssessments = (await API.get(`/patients/${pid}/neurodevelopment`)) || [];
     renderApp();
   } catch (e) { alert(e.message); }
 };
@@ -1215,6 +1415,33 @@ function renderModals() {
         <div class="modal-header"><h2>Cambiar Contraseña del Tutor</h2><button class="close-btn" onclick="closeModal('resetPasswordModal')"><i class="fa-solid fa-xmark"></i></button></div>
         <div class="form-group"><label>Nueva Contraseña</label><input type="text" id="resetPasswordInput" class="form-control" placeholder="Mín. 6 caracteres"></div>
         <button class="btn btn-primary" style="width:100%;margin-top:1rem;" onclick="confirmResetPassword()">Actualizar Contraseña</button>
+      </div>
+    </div>
+
+    <!-- Neuro Screener Modal -->
+    <div class="modal-overlay" id="neuroScreenerModal" onclick="if(event.target===this)closeModal('neuroScreenerModal')">
+      <div class="modal-content" style="max-width:680px;max-height:90vh;display:flex;flex-direction:column;">
+        <div class="modal-header" style="flex-shrink:0;">
+          <div>
+            <h2 id="neuroModalTitle" style="margin:0;font-size:1.2rem;"><i class="fa-solid fa-brain" style="color:var(--primary);margin-right:0.5rem;"></i>Evaluación</h2>
+            <p id="neuroModalSubtitle" style="margin:0.2rem 0 0;font-size:0.82rem;color:var(--text-light);"></p>
+          </div>
+          <button class="close-btn" onclick="closeModal('neuroScreenerModal')"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div id="neuroModalError" style="display:none;background:#fee2e2;color:#dc2626;padding:0.6rem 0.9rem;border-radius:8px;margin:0.5rem 1.5rem;font-size:0.85rem;flex-shrink:0;"></div>
+        <div id="neuroModalBody" style="overflow-y:auto;flex:1;padding:0 1.5rem;"></div>
+        <div style="flex-shrink:0;padding:1rem 1.5rem;border-top:1px solid #f1f5f9;">
+          <div class="form-group" style="margin-bottom:0.75rem;">
+            <label style="font-size:0.85rem;">Notas clínicas (opcional)</label>
+            <input type="text" id="neuroModalNotes" class="form-control" style="font-size:0.9rem;" placeholder="Observaciones sobre la evaluación…">
+          </div>
+          <div style="display:flex;gap:0.75rem;justify-content:flex-end;">
+            <button class="btn btn-secondary" onclick="closeModal('neuroScreenerModal')">Cancelar</button>
+            <button class="btn btn-primary" onclick="confirmNeuroScreener()">
+              <i class="fa-solid fa-check"></i> Guardar evaluación
+            </button>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -1942,15 +2169,18 @@ window.viewPatient = async function(id) {
   currentPatient      = patients.find(p => p.id === id) || null;
   consultations       = [];
   patientVaccinations = [];
+  neuroAssessments    = [];
   currentView         = 'parent-profile';
   renderApp();
   try {
-    const [consults, vaccines] = await Promise.all([
+    const [consults, vaccines, neuro] = await Promise.all([
       API.get(`/patients/${id}/consultations`),
       API.get(`/patients/${id}/vaccinations`),
+      API.get(`/patients/${id}/neurodevelopment`),
     ]);
-    consultations       = consults  || [];
-    patientVaccinations = vaccines  || [];
+    consultations       = consults || [];
+    patientVaccinations = vaccines || [];
+    neuroAssessments    = neuro    || [];
     renderApp();
   } catch (e) { console.error('viewPatient:', e.message); }
 };

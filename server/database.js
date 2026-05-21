@@ -141,6 +141,24 @@ function runMigrations() {
     try { db.prepare(sql).run(); } catch (e) {}
   }
 
+  // Fase D: módulo de neurodesarrollo
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS neurodevelopment_assessments (
+      id           INTEGER PRIMARY KEY AUTOINCREMENT,
+      patient_id   INTEGER NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+      type         TEXT NOT NULL CHECK(type IN ('denver','mchat')),
+      age_months   INTEGER,
+      date         TEXT NOT NULL,
+      responses    TEXT,
+      score        REAL,
+      risk_level   TEXT CHECK(risk_level IN ('bajo','moderado','alto')),
+      alarms       TEXT,
+      notes        TEXT,
+      created_by   INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at   TEXT DEFAULT (datetime('now'))
+    );
+  `);
+
   // Fase E: módulo de vacunación NOM-031
   db.exec(`
     CREATE TABLE IF NOT EXISTS vaccinations (
