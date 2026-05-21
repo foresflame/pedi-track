@@ -1,0 +1,13 @@
+node_modules
+.git
+.env
+server/db
+*.log
+*.md
+PLAN.md
+fly.toml
+Dockerfile
+.dockerignore
+app.js
+index.html
+styles.css
