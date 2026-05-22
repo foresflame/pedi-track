@@ -1272,8 +1272,11 @@ window.dcSelectDate = async function(dateStr) {
     };
 
     // Build time-ordered list of all slots, marking booked ones
+    // Citas canceladas liberan el slot — no se incluyen en el mapa
     const bookedByTime = {};
-    for (const a of dayAppts) bookedByTime[a.time] = a;
+    for (const a of dayAppts) {
+      if (a.status !== 'cancelada') bookedByTime[a.time] = a;
+    }
 
     const slotsHtml = dcDaySlots.map(s => {
       const appt = bookedByTime[s.time];
@@ -1287,7 +1290,7 @@ window.dcSelectDate = async function(dateStr) {
           </div>
           <div style="display:flex;align-items:center;gap:0.4rem;">
             <span style="font-size:0.72rem;background:${cfg.bg};color:${cfg.color};border:1px solid ${cfg.color}33;border-radius:20px;padding:0.1rem 0.5rem;white-space:nowrap;">${cfg.label}</span>
-            ${appt.status === 'pendiente' ? `<button class="btn" style="padding:0.15rem 0.5rem;font-size:0.72rem;background:var(--primary);color:white;border-radius:5px;box-shadow:none;" onclick="dcChangeStatus(${appt.id},'confirmada')">Confirmar</button>` : ''}
+            ${appt.status === 'pendiente' && appt.patient_id ? `<button class="btn" style="padding:0.15rem 0.5rem;font-size:0.72rem;background:var(--primary);color:white;border-radius:5px;box-shadow:none;" onclick="dcChangeStatus(${appt.id},'confirmada')">Confirmar</button>` : ''}
             ${appt.status !== 'cancelada' && appt.status !== 'completada' ? `<button class="btn" style="padding:0.15rem 0.5rem;font-size:0.72rem;background:white;color:#dc2626;border:1px solid #fca5a5;border-radius:5px;box-shadow:none;" onclick="dcChangeStatus(${appt.id},'cancelada')">Cancelar</button>` : ''}
             ${appt.status === 'confirmada' ? `<button class="btn" style="padding:0.15rem 0.5rem;font-size:0.72rem;background:#0284c7;color:white;border-radius:5px;box-shadow:none;" onclick="dcChangeStatus(${appt.id},'completada')">Completar</button>` : ''}
           </div>
