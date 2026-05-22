@@ -2889,8 +2889,13 @@ function validateCurrentStep() {
     if (el.closest('[style*="display: none"]') || el.closest('[style*="display:none"]')) return;
     el.style.borderColor = '';
     if (el.type === 'radio') {
-      if (!radioGroups[el.name]) radioGroups[el.name] = [];
-      radioGroups[el.name].push(el);
+      // Cuando encontramos un radio con required, tomamos TODOS los radios
+      // del mismo grupo (name), no solo los que tienen required
+      if (!radioGroups[el.name]) {
+        radioGroups[el.name] = Array.from(
+          container.querySelectorAll(`input[type="radio"][name="${el.name}"]`)
+        );
+      }
     } else if (!el.value || el.value.trim() === '') {
       isValid = false; el.style.borderColor = '#ef4444';
       if (!firstInvalid) firstInvalid = el;
