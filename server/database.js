@@ -176,7 +176,36 @@ function runMigrations() {
     );
   `);
 
-  console.log('âœ” Migraciones ejecutadas');
+  // Calendario: patient_id nullable + columna label en appointments
+  const apptCols = db.prepare('PRAGMA table_info(appointments)').all();
+  const patCol   = apptCols.find(c => c.name === 'patient_id');
+  if (patCol && patCol.notnull === 1) {
+    // Recrear tabla sin NOT NULL en patient_id y con columna label
+    db.pragma('foreign_keys = OFF');
+    db.exec(`
+      CREATE TABLE appointments_v2 (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        patient_id  INTEGER REFERENCES patients(id) ON DELETE CASCADE,
+        doctor_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        date        TEXT    NOT NULL,
+        time        TEXT    NOT NULL,
+        status      TEXT    DEFAULT 'pendiente' CHECK(status IN ('pendiente','confirmada','cancelada','completada')),
+        notes       TEXT,
+        label       TEXT,
+        created_at  TEXT    DEFAULT (datetime('now')),
+        UNIQUE(doctor_id, date, time)
+      );
+      INSERT INTO appointments_v2 (id, patient_id, doctor_id, date, time, status, notes, created_at)
+        SELECT id, patient_id, doctor_id, date, time, status, notes, created_at FROM appointments;
+      DROP TABLE appointments;
+      ALTER TABLE appointments_v2 RENAME TO appointments;
+    `);
+    db.pragma('foreign_keys = ON');
+  }
+  // Por si la tabla ya existe sin NOT NULL pero sin la columna label
+  try { db.prepare('ALTER TABLE appointments ADD COLUMN label TEXT').run(); } catch(e) {}
+
+  console.log('✔ Migraciones ejecutadas');
 }
 
 function initDB() {

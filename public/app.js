@@ -1283,7 +1283,7 @@ window.dcSelectDate = async function(dateStr) {
         <div style="display:flex;align-items:center;justify-content:space-between;padding:0.55rem 0.75rem;border-radius:8px;background:${cfg.bg};border-left:3px solid ${cfg.color};margin-bottom:0.4rem;gap:0.5rem;flex-wrap:wrap;">
           <div style="display:flex;align-items:center;gap:0.5rem;">
             <span style="font-weight:700;font-size:0.82rem;color:var(--text-dark);min-width:42px;">${s.time}</span>
-            <span style="font-size:0.85rem;">${appt.patient_name}</span>
+            <span style="font-size:0.85rem;">${appt.patient_name || `<span style="color:#64748b;font-style:italic;">${appt.label || 'Bloqueado'}</span>`}</span>
           </div>
           <div style="display:flex;align-items:center;gap:0.4rem;">
             <span style="font-size:0.72rem;background:${cfg.bg};color:${cfg.color};border:1px solid ${cfg.color}33;border-radius:20px;padding:0.1rem 0.5rem;white-space:nowrap;">${cfg.label}</span>
@@ -1330,11 +1330,10 @@ window.openDcBookModal = function(preselTime) {
     : `<option value="">Sin turnos disponibles</option>`;
   sel.disabled = !free.length;
 
-  // Populate patient select
+  // Populate patient select (optional)
   const patSel = document.getElementById('dcBookPatient');
-  patSel.innerHTML = patients.length
-    ? `<option value="">— Seleccionar paciente —</option>` + patients.map(p => `<option value="${p.id}">${p.name}</option>`).join('')
-    : `<option value="">Sin pacientes asignados</option>`;
+  patSel.innerHTML = `<option value="">— Sin paciente (bloquear turno) —</option>`
+    + patients.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
 
   document.getElementById('dcBookNotes').value = '';
   document.getElementById('dcBookError').style.display = 'none';
@@ -1346,10 +1345,16 @@ window.confirmDcBook = async function() {
   const patientId = document.getElementById('dcBookPatient').value;
   const notes     = document.getElementById('dcBookNotes').value.trim();
   const errEl     = document.getElementById('dcBookError');
-  if (!time)      { errEl.textContent = 'Selecciona un turno'; errEl.style.display = 'block'; return; }
-  if (!patientId) { errEl.textContent = 'Selecciona un paciente'; errEl.style.display = 'block'; return; }
+  if (!time) { errEl.textContent = 'Selecciona un turno'; errEl.style.display = 'block'; return; }
   try {
-    await API.post('/appointments', { patient_id: parseInt(patientId), doctor_id: currentUser.id, date: dcSelDate, time, notes: notes || null });
+    await API.post('/appointments', {
+      patient_id: patientId ? parseInt(patientId) : null,
+      doctor_id:  currentUser.id,
+      date:       dcSelDate,
+      time,
+      notes:      notes || null,
+      label:      !patientId ? (notes || 'Bloqueado') : null
+    });
     closeModal('dcBookModal');
     dcAllAppts = (await API.get('/appointments')) || [];
     dcRenderGrid();
@@ -1720,12 +1725,12 @@ function renderModals() {
           <select id="dcBookTime" class="form-control"></select>
         </div>
         <div class="form-group">
-          <label>Paciente *</label>
+          <label>Paciente <small style="color:#94a3b8;font-weight:400;">(opcional)</small></label>
           <select id="dcBookPatient" class="form-control"></select>
         </div>
         <div class="form-group">
-          <label>Notas</label>
-          <input type="text" id="dcBookNotes" class="form-control" placeholder="Motivo de la consulta (opcional)">
+          <label>Notas / Motivo</label>
+          <input type="text" id="dcBookNotes" class="form-control" placeholder="Motivo de la consulta o del bloqueo (opcional)">
         </div>
         <div style="display:flex;gap:0.75rem;justify-content:flex-end;margin-top:1.25rem;">
           <button class="btn btn-secondary" onclick="closeModal('dcBookModal')">Cancelar</button>

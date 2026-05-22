@@ -85,7 +85,7 @@ router.get('/', (req, res) => {
   const baseQuery = `
     SELECT a.*, p.name as patient_name, u.name as doctor_name
     FROM appointments a
-    JOIN patients p ON p.id = a.patient_id
+    LEFT JOIN patients p ON p.id = a.patient_id
     JOIN users u ON u.id = a.doctor_id
   `;
 
@@ -110,13 +110,14 @@ router.get('/', (req, res) => {
 
 // POST /api/appointments — reservar cita
 router.post('/', requireRole('tutor', 'pediatra', 'admin'), (req, res) => {
-  const { patient_id, doctor_id, date, time, notes } = req.body;
-  if (!patient_id || !doctor_id || !date || !time) {
-    return res.status(400).json({ error: 'patient_id, doctor_id, fecha y hora son requeridos' });
+  const { patient_id, doctor_id, date, time, notes, label } = req.body;
+  if (!doctor_id || !date || !time) {
+    return res.status(400).json({ error: 'doctor_id, fecha y hora son requeridos' });
   }
 
-  // Tutor solo puede reservar para su propio paciente
+  // Tutor solo puede reservar para su propio paciente (y siempre necesita patient_id)
   if (req.user.role === 'tutor') {
+    if (!patient_id) return res.status(400).json({ error: 'El tutor debe seleccionar un paciente' });
     const p = db.prepare('SELECT id FROM patients WHERE id = ? AND tutor_id = ?').get(patient_id, req.user.id);
     if (!p) return res.status(403).json({ error: 'No puedes agendar citas para este paciente' });
 
@@ -133,14 +134,15 @@ router.post('/', requireRole('tutor', 'pediatra', 'admin'), (req, res) => {
   ).get(doctor_id, date, time);
   if (conflict) return res.status(409).json({ error: 'Ese horario ya está reservado' });
 
+  const pid = patient_id ? parseInt(patient_id) : null;
   const result = db.prepare(
-    'INSERT INTO appointments (patient_id, doctor_id, date, time, notes) VALUES (?, ?, ?, ?, ?)'
-  ).run(patient_id, doctor_id, date, time, notes || null);
+    'INSERT INTO appointments (patient_id, doctor_id, date, time, notes, label) VALUES (?, ?, ?, ?, ?, ?)'
+  ).run(pid, doctor_id, date, time, notes || null, label || null);
 
   const created = db.prepare(`
     SELECT a.*, p.name as patient_name, u.name as doctor_name
     FROM appointments a
-    JOIN patients p ON p.id = a.patient_id
+    LEFT JOIN patients p ON p.id = a.patient_id
     JOIN users u ON u.id = a.doctor_id
     WHERE a.id = ?
   `).get(result.lastInsertRowid);
