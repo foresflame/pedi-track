@@ -38,6 +38,12 @@ let bookingYear  = new Date().getFullYear();
 let bookingMonth = new Date().getMonth();
 let bookingSelectedDate = null;
 let bookingSlots = [];
+// Doctor agenda calendar (availability-settings view)
+let dcYear     = new Date().getFullYear();
+let dcMonth    = new Date().getMonth();
+let dcSelDate  = null;
+let dcAllAppts = [];
+let dcDaySlots = [];
 
 function getRoleDefaultView(role) {
   if (role === 'admin')    return 'admin-dashboard';
@@ -115,7 +121,7 @@ function renderApp() {
   app.innerHTML = html;
 
   if (currentView === 'parent-profile')       initChart();
-  if (currentView === 'availability-settings') loadAvailability();
+  if (currentView === 'availability-settings') { loadAvailability(); loadDoctorCalendar(); }
 }
 
 // === Views ===
@@ -1003,33 +1009,83 @@ function renderAvailabilitySettings() {
       <div class="dashboard-header">
         <div>
           <h1>Horarios de Atención</h1>
-          <p style="color:var(--text-light);">Activa los días y define tus franjas horarias</p>
+          <p style="color:var(--text-light);">Activa los días, define tus franjas y gestiona tu agenda</p>
         </div>
         <button class="btn btn-secondary" onclick="navigate('doctor-dashboard')"><i class="fa-solid fa-arrow-left"></i> Volver</button>
       </div>
 
-      <div style="max-width:680px;">
-        <div style="background:white;border-radius:18px;padding:1.75rem 2rem;box-shadow:var(--card-shadow);">
-          <div style="display:flex;align-items:center;gap:0.7rem;margin-bottom:1.5rem;padding-bottom:1.25rem;border-bottom:2px solid var(--bg-color);">
-            <div style="width:36px;height:36px;border-radius:10px;background:var(--primary-light);display:flex;align-items:center;justify-content:center;">
-              <i class="fa-regular fa-calendar-check" style="color:var(--primary);font-size:1.1rem;"></i>
+      <div style="display:grid;grid-template-columns:minmax(0,640px) minmax(0,1fr);gap:1.5rem;align-items:start;">
+
+        <!-- LEFT: horario semanal -->
+        <div>
+          <div style="background:white;border-radius:18px;padding:1.75rem 2rem;box-shadow:var(--card-shadow);">
+            <div style="display:flex;align-items:center;gap:0.7rem;margin-bottom:1.5rem;padding-bottom:1.25rem;border-bottom:2px solid var(--bg-color);">
+              <div style="width:36px;height:36px;border-radius:10px;background:var(--primary-light);display:flex;align-items:center;justify-content:center;">
+                <i class="fa-regular fa-calendar-check" style="color:var(--primary);font-size:1.1rem;"></i>
+              </div>
+              <div>
+                <div style="font-weight:700;font-size:0.95rem;">Configuración semanal</div>
+                <div style="font-size:0.8rem;color:var(--text-light);">Activa un día con el toggle para configurar su horario</div>
+              </div>
             </div>
-            <div>
-              <div style="font-weight:700;font-size:0.95rem;">Configuración semanal</div>
-              <div style="font-size:0.8rem;color:var(--text-light);">Activa un día con el toggle para configurar su horario</div>
-            </div>
+            <div id="availabilityGrid"><p style="color:var(--text-light);text-align:center;padding:2rem;"><i class="fa-solid fa-spinner fa-spin"></i> Cargando...</p></div>
           </div>
-          <div id="availabilityGrid"><p style="color:var(--text-light);text-align:center;padding:2rem;"><i class="fa-solid fa-spinner fa-spin"></i> Cargando...</p></div>
+          <div style="display:flex;justify-content:flex-end;gap:0.75rem;margin-top:1.25rem;">
+            <button class="btn btn-secondary" onclick="navigate('doctor-dashboard')" style="padding:0.65rem 1.4rem;">Cancelar</button>
+            <button class="btn btn-primary" onclick="saveAvailability()" style="padding:0.65rem 1.6rem;gap:0.5rem;">
+              <i class="fa-solid fa-floppy-disk"></i> Guardar Horario
+            </button>
+          </div>
         </div>
 
-        <div style="display:flex;justify-content:flex-end;gap:0.75rem;margin-top:1.25rem;">
-          <button class="btn btn-secondary" onclick="navigate('doctor-dashboard')" style="padding:0.65rem 1.4rem;">
-            Cancelar
-          </button>
-          <button class="btn btn-primary" onclick="saveAvailability()" style="padding:0.65rem 1.6rem;gap:0.5rem;">
-            <i class="fa-solid fa-floppy-disk"></i> Guardar Horario
-          </button>
+        <!-- RIGHT: agenda calendario -->
+        <div id="doctorAgendaWrap">
+          <div style="background:white;border-radius:18px;padding:1.5rem;box-shadow:var(--card-shadow);">
+            <!-- Calendar header -->
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem;">
+              <div style="display:flex;align-items:center;gap:0.6rem;">
+                <div style="width:32px;height:32px;border-radius:9px;background:var(--primary-light);display:flex;align-items:center;justify-content:center;">
+                  <i class="fa-regular fa-calendar" style="color:var(--primary);"></i>
+                </div>
+                <span style="font-weight:700;font-size:0.95rem;">Agenda del Mes</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:0.4rem;">
+                <button class="btn btn-secondary" style="padding:0.3rem 0.7rem;font-size:0.85rem;box-shadow:none;" onclick="dcNavMonth(-1)"><i class="fa-solid fa-chevron-left"></i></button>
+                <span id="dcMonthLabel" style="font-weight:600;font-size:0.9rem;min-width:110px;text-align:center;"></span>
+                <button class="btn btn-secondary" style="padding:0.3rem 0.7rem;font-size:0.85rem;box-shadow:none;" onclick="dcNavMonth(1)"><i class="fa-solid fa-chevron-right"></i></button>
+              </div>
+            </div>
+            <!-- Day-of-week headers -->
+            <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;margin-bottom:4px;">
+              ${['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'].map(d =>
+                `<div style="text-align:center;font-size:0.7rem;font-weight:700;color:var(--text-light);padding:4px 0;">${d}</div>`
+              ).join('')}
+            </div>
+            <!-- Calendar grid filled by JS -->
+            <div id="dcGrid" style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px;"></div>
+            <!-- Legend -->
+            <div style="display:flex;gap:0.9rem;margin-top:0.9rem;flex-wrap:wrap;font-size:0.72rem;color:var(--text-light);">
+              <span><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:var(--primary);margin-right:4px;vertical-align:middle;"></span>Con citas</span>
+              <span><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:#e2e8f0;margin-right:4px;vertical-align:middle;"></span>Día hábil</span>
+              <span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;border:2px solid var(--primary);margin-right:4px;vertical-align:middle;"></span>Hoy</span>
+            </div>
+          </div>
+
+          <!-- Day detail panel -->
+          <div id="dcDayPanel" style="display:none;background:white;border-radius:18px;padding:1.4rem 1.5rem;box-shadow:var(--card-shadow);margin-top:1rem;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+              <div>
+                <div id="dcDayTitle" style="font-weight:700;font-size:1rem;color:var(--text-dark);"></div>
+                <div id="dcDaySubtitle" style="font-size:0.8rem;color:var(--text-light);margin-top:2px;"></div>
+              </div>
+              <button class="btn btn-primary" style="padding:0.35rem 0.9rem;font-size:0.8rem;" onclick="openDcBookModal()">
+                <i class="fa-solid fa-plus"></i> Nueva Cita
+              </button>
+            </div>
+            <div id="dcDayAppts"></div>
+          </div>
         </div>
+
       </div>
     </div>
   `;
@@ -1095,6 +1151,211 @@ async function loadAvailability() {
 }
 
 function toMinutes(t) { const [h,m] = t.split(':').map(Number); return h*60+m; }
+
+// ── Doctor Agenda Calendar ─────────────────────────────────────────────────
+
+async function loadDoctorCalendar() {
+  try {
+    dcAllAppts = (await API.get('/appointments')) || [];
+    dcRenderGrid();
+  } catch (e) { console.error('dcLoad:', e.message); }
+}
+
+function dcRenderGrid() {
+  const label = document.getElementById('dcMonthLabel');
+  const grid  = document.getElementById('dcGrid');
+  if (!label || !grid) return;
+
+  const monthNames = ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
+                      'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  label.textContent = `${monthNames[dcMonth]} ${dcYear}`;
+
+  // Build a set of dates with appointments this month
+  const apptsByDate = {};
+  for (const a of dcAllAppts) {
+    if (!a.date.startsWith(`${dcYear}-${String(dcMonth+1).padStart(2,'0')}`)) continue;
+    if (!apptsByDate[a.date]) apptsByDate[a.date] = [];
+    apptsByDate[a.date].push(a);
+  }
+
+  const today     = new Date().toISOString().slice(0,10);
+  const firstDay  = new Date(dcYear, dcMonth, 1).getDay(); // 0=Sun
+  const daysInMonth = new Date(dcYear, dcMonth+1, 0).getDate();
+
+  let html = '';
+  // Empty cells before first day
+  for (let i = 0; i < firstDay; i++) html += `<div></div>`;
+
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dateStr = `${dcYear}-${String(dcMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const appts   = apptsByDate[dateStr] || [];
+    const isToday = dateStr === today;
+    const isSel   = dateStr === dcSelDate;
+    const hasAppts = appts.length > 0;
+    const isPast  = dateStr < today;
+
+    const active = appts.filter(a => a.status !== 'cancelada').length;
+
+    let bg     = 'transparent';
+    let color  = isPast ? '#94a3b8' : 'var(--text-dark)';
+    let border = 'none';
+    let badge  = '';
+
+    if (isSel)      { bg = 'var(--primary)'; color = 'white'; }
+    else if (hasAppts && !isPast) { bg = 'var(--primary-light)'; }
+
+    if (isToday && !isSel) border = `2px solid var(--primary)`;
+
+    if (active > 0) badge = `<span style="display:block;font-size:0.6rem;font-weight:700;color:${isSel?'rgba(255,255,255,0.9)':'var(--primary)'};line-height:1;">${active} cita${active>1?'s':''}</span>`;
+
+    html += `
+      <div onclick="dcSelectDate('${dateStr}')"
+           style="border-radius:8px;padding:5px 2px;text-align:center;cursor:pointer;
+                  background:${bg};border:${border};
+                  transition:background 0.15s;min-height:44px;display:flex;flex-direction:column;align-items:center;justify-content:center;"
+           title="${dateStr}">
+        <span style="font-size:0.82rem;font-weight:${isToday?'700':'500'};color:${color};">${d}</span>
+        ${badge}
+      </div>`;
+  }
+  grid.innerHTML = html;
+}
+
+window.dcNavMonth = function(dir) {
+  dcMonth += dir;
+  if (dcMonth > 11) { dcMonth = 0;  dcYear++; }
+  if (dcMonth < 0)  { dcMonth = 11; dcYear--; }
+  dcSelDate = null;
+  dcRenderGrid();
+  const panel = document.getElementById('dcDayPanel');
+  if (panel) panel.style.display = 'none';
+};
+
+window.dcSelectDate = async function(dateStr) {
+  dcSelDate = dateStr;
+  dcRenderGrid(); // re-render to show selection
+
+  const panel    = document.getElementById('dcDayPanel');
+  const titleEl  = document.getElementById('dcDayTitle');
+  const subEl    = document.getElementById('dcDaySubtitle');
+  const apptsEl  = document.getElementById('dcDayAppts');
+  if (!panel) return;
+
+  const dateObj  = new Date(dateStr + 'T12:00:00');
+  const dayLabel = dateObj.toLocaleDateString('es-MX', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
+  titleEl.textContent = dayLabel.charAt(0).toUpperCase() + dayLabel.slice(1);
+
+  // Load available slots for this day
+  apptsEl.innerHTML = `<p style="color:var(--text-light);font-size:0.85rem;text-align:center;padding:0.5rem;"><i class="fa-solid fa-spinner fa-spin"></i> Cargando...</p>`;
+  panel.style.display = 'block';
+
+  try {
+    const [slotsResp] = await Promise.all([
+      API.get(`/appointments/slots/${currentUser.id}/${dateStr}`)
+    ]);
+    dcDaySlots = slotsResp || [];
+
+    const dayAppts = dcAllAppts.filter(a => a.date === dateStr);
+    const freeSlots = dcDaySlots.filter(s => s.available).length;
+    subEl.textContent = `${dayAppts.length} cita(s) • ${freeSlots} turno(s) libre(s)`;
+
+    if (dayAppts.length === 0 && dcDaySlots.length === 0) {
+      apptsEl.innerHTML = `<p style="color:var(--text-light);font-size:0.85rem;padding:0.5rem 0;text-align:center;">No hay turnos configurados para este día.</p>`;
+      return;
+    }
+
+    const statusCfg = {
+      pendiente:  { bg:'#fef9c3', color:'#ca8a04', label:'Pendiente' },
+      confirmada: { bg:'#dcfce7', color:'#16a34a', label:'Confirmada' },
+      completada: { bg:'#e0f2fe', color:'#0284c7', label:'Completada' },
+      cancelada:  { bg:'#fee2e2', color:'#dc2626', label:'Cancelada'  },
+    };
+
+    // Build time-ordered list of all slots, marking booked ones
+    const bookedByTime = {};
+    for (const a of dayAppts) bookedByTime[a.time] = a;
+
+    const slotsHtml = dcDaySlots.map(s => {
+      const appt = bookedByTime[s.time];
+      if (appt) {
+        const cfg = statusCfg[appt.status] || statusCfg.pendiente;
+        return `
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:0.55rem 0.75rem;border-radius:8px;background:${cfg.bg};border-left:3px solid ${cfg.color};margin-bottom:0.4rem;gap:0.5rem;flex-wrap:wrap;">
+          <div style="display:flex;align-items:center;gap:0.5rem;">
+            <span style="font-weight:700;font-size:0.82rem;color:var(--text-dark);min-width:42px;">${s.time}</span>
+            <span style="font-size:0.85rem;">${appt.patient_name}</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:0.4rem;">
+            <span style="font-size:0.72rem;background:${cfg.bg};color:${cfg.color};border:1px solid ${cfg.color}33;border-radius:20px;padding:0.1rem 0.5rem;white-space:nowrap;">${cfg.label}</span>
+            ${appt.status === 'pendiente' ? `<button class="btn" style="padding:0.15rem 0.5rem;font-size:0.72rem;background:var(--primary);color:white;border-radius:5px;box-shadow:none;" onclick="dcChangeStatus(${appt.id},'confirmada')">Confirmar</button>` : ''}
+            ${appt.status !== 'cancelada' && appt.status !== 'completada' ? `<button class="btn" style="padding:0.15rem 0.5rem;font-size:0.72rem;background:white;color:#dc2626;border:1px solid #fca5a5;border-radius:5px;box-shadow:none;" onclick="dcChangeStatus(${appt.id},'cancelada')">Cancelar</button>` : ''}
+            ${appt.status === 'confirmada' ? `<button class="btn" style="padding:0.15rem 0.5rem;font-size:0.72rem;background:#0284c7;color:white;border-radius:5px;box-shadow:none;" onclick="dcChangeStatus(${appt.id},'completada')">Completar</button>` : ''}
+          </div>
+        </div>`;
+      } else {
+        return `
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:0.45rem 0.75rem;border-radius:8px;border:1.5px dashed #e2e8f0;margin-bottom:0.4rem;">
+          <span style="font-size:0.82rem;font-weight:600;color:#94a3b8;">${s.time} <span style="font-weight:400;font-size:0.75rem;">— libre</span></span>
+          <button class="btn" style="padding:0.15rem 0.55rem;font-size:0.72rem;background:var(--primary);color:white;border-radius:5px;box-shadow:none;" onclick="openDcBookModal('${s.time}')"><i class="fa-solid fa-plus"></i> Agendar</button>
+        </div>`;
+      }
+    }).join('');
+
+    apptsEl.innerHTML = slotsHtml || `<p style="color:var(--text-light);font-size:0.85rem;">No hay turnos para este día.</p>`;
+  } catch (e) {
+    apptsEl.innerHTML = `<p style="color:#ef4444;font-size:0.85rem;">${e.message}</p>`;
+  }
+};
+
+window.dcChangeStatus = async function(apptId, status) {
+  try {
+    await API.put(`/appointments/${apptId}/status`, { status });
+    dcAllAppts = (await API.get('/appointments')) || [];
+    dcRenderGrid();
+    if (dcSelDate) dcSelectDate(dcSelDate);
+  } catch (e) { alert(e.message); }
+};
+
+window.openDcBookModal = function(preselTime) {
+  if (!dcSelDate) return;
+  const dateObj  = new Date(dcSelDate + 'T12:00:00');
+  const dayLabel = dateObj.toLocaleDateString('es-MX', { weekday:'long', day:'numeric', month:'long' });
+  document.getElementById('dcBookDateLabel').textContent = dayLabel.charAt(0).toUpperCase() + dayLabel.slice(1);
+
+  // Populate time select with free slots
+  const sel = document.getElementById('dcBookTime');
+  const free = dcDaySlots.filter(s => s.available);
+  sel.innerHTML = free.length
+    ? free.map(s => `<option value="${s.time}" ${s.time===preselTime?'selected':''}>${s.time}</option>`).join('')
+    : `<option value="">Sin turnos disponibles</option>`;
+  sel.disabled = !free.length;
+
+  // Populate patient select
+  const patSel = document.getElementById('dcBookPatient');
+  patSel.innerHTML = patients.length
+    ? `<option value="">— Seleccionar paciente —</option>` + patients.map(p => `<option value="${p.id}">${p.name}</option>`).join('')
+    : `<option value="">Sin pacientes asignados</option>`;
+
+  document.getElementById('dcBookNotes').value = '';
+  document.getElementById('dcBookError').style.display = 'none';
+  openModal('dcBookModal');
+};
+
+window.confirmDcBook = async function() {
+  const time      = document.getElementById('dcBookTime').value;
+  const patientId = document.getElementById('dcBookPatient').value;
+  const notes     = document.getElementById('dcBookNotes').value.trim();
+  const errEl     = document.getElementById('dcBookError');
+  if (!time)      { errEl.textContent = 'Selecciona un turno'; errEl.style.display = 'block'; return; }
+  if (!patientId) { errEl.textContent = 'Selecciona un paciente'; errEl.style.display = 'block'; return; }
+  try {
+    await API.post('/appointments', { patient_id: parseInt(patientId), doctor_id: currentUser.id, date: dcSelDate, time, notes: notes || null });
+    closeModal('dcBookModal');
+    dcAllAppts = (await API.get('/appointments')) || [];
+    dcRenderGrid();
+    dcSelectDate(dcSelDate);
+  } catch (e) { errEl.textContent = e.message; errEl.style.display = 'block'; }
+};
 
 window.updateSlotPreview = function(dow) {
   const start = document.getElementById(`avStart_${dow}`)?.value;
@@ -1441,6 +1702,34 @@ function renderModals() {
               <i class="fa-solid fa-check"></i> Guardar evaluación
             </button>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Doctor Book Appointment Modal -->
+    <div class="modal-overlay" id="dcBookModal" onclick="if(event.target===this)closeModal('dcBookModal')">
+      <div class="modal-content" style="max-width:440px;">
+        <div class="modal-header">
+          <h2><i class="fa-regular fa-calendar-plus" style="color:var(--primary);margin-right:0.5rem;"></i>Nueva Cita</h2>
+          <button class="close-btn" onclick="closeModal('dcBookModal')"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <p style="font-size:0.85rem;color:var(--text-light);margin-bottom:1rem;" id="dcBookDateLabel"></p>
+        <div id="dcBookError" style="display:none;background:#fee2e2;color:#dc2626;padding:0.6rem 0.9rem;border-radius:8px;margin-bottom:0.8rem;font-size:0.85rem;"></div>
+        <div class="form-group">
+          <label>Turno *</label>
+          <select id="dcBookTime" class="form-control"></select>
+        </div>
+        <div class="form-group">
+          <label>Paciente *</label>
+          <select id="dcBookPatient" class="form-control"></select>
+        </div>
+        <div class="form-group">
+          <label>Notas</label>
+          <input type="text" id="dcBookNotes" class="form-control" placeholder="Motivo de la consulta (opcional)">
+        </div>
+        <div style="display:flex;gap:0.75rem;justify-content:flex-end;margin-top:1.25rem;">
+          <button class="btn btn-secondary" onclick="closeModal('dcBookModal')">Cancelar</button>
+          <button class="btn btn-primary" onclick="confirmDcBook()"><i class="fa-solid fa-check"></i> Confirmar</button>
         </div>
       </div>
     </div>
