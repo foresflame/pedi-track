@@ -128,11 +128,16 @@ router.post('/', requireRole('tutor', 'pediatra', 'admin'), (req, res) => {
     if (existing) return res.status(409).json({ error: 'Ya tienes una cita activa. Cancélala antes de agendar una nueva.' });
   }
 
-  // Verificar que el slot esté disponible
+  // Verificar que el slot esté disponible (ignora canceladas)
   const conflict = db.prepare(
     "SELECT id FROM appointments WHERE doctor_id = ? AND date = ? AND time = ? AND status != 'cancelada'"
   ).get(doctor_id, date, time);
   if (conflict) return res.status(409).json({ error: 'Ese horario ya está reservado' });
+
+  // Limpiar registro cancelado en ese slot (evita error UNIQUE constraint)
+  db.prepare(
+    "DELETE FROM appointments WHERE doctor_id = ? AND date = ? AND time = ? AND status = 'cancelada'"
+  ).run(doctor_id, date, time);
 
   const pid = patient_id ? parseInt(patient_id) : null;
   const result = db.prepare(
