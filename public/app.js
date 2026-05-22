@@ -381,7 +381,7 @@ function renderParentProfile() {
                 </div>
               </div>
               <ul style="margin:0 0 0 1.5rem;padding:0;">
-                ${meds.map(m => `<li style="margin-bottom:0.2rem;">${m.name} — ${m.dose} (${m.freq})</li>`).join('')}
+                ${meds.map(m => `<li style="margin-bottom:0.3rem;">${m.name} — ${m.dose}${m.freq ? `, cada ${m.freq}` : ''}${m.days ? `, <strong>por ${m.days}</strong>` : ''}${m.indication ? `<br><span style="font-size:0.82rem;color:#64748b;margin-left:0.5rem;">↳ ${m.indication}</span>` : ''}</li>`).join('')}
               </ul>
             </div>` : ''}
             <div class="timeline-metrics">
@@ -2592,10 +2592,12 @@ window.addMedicationField = function(med = null) {
       ${idx > 0 ? `<button class="btn" style="padding:0;color:#ef4444;background:transparent;box-shadow:none;" onclick="this.closest('.medication-item').remove()"><i class="fa-solid fa-trash"></i></button>` : ''}
     </div>
     <div class="form-group" style="margin-bottom:0.5rem;"><input type="text" class="form-control med-name" placeholder="Nombre (Ej. Paracetamol)" value="${med?.name||''}"></div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0.75rem;margin-bottom:0.5rem;">
       <div class="form-group" style="margin-bottom:0;"><input type="text" class="form-control med-dose" placeholder="Dosis (Ej. 5ml)" value="${med?.dose||''}"></div>
       <div class="form-group" style="margin-bottom:0;"><input type="text" class="form-control med-freq" placeholder="Frecuencia (Ej. 8h)" value="${med?.freq||''}"></div>
-    </div>`;
+      <div class="form-group" style="margin-bottom:0;"><input type="text" class="form-control med-days" placeholder="Duración (Ej. 5 días)" value="${med?.days||''}"></div>
+    </div>
+    <div class="form-group" style="margin-bottom:0;"><input type="text" class="form-control med-indication" placeholder="Indicación adicional (opcional)" value="${med?.indication||''}"></div>`;
   list.appendChild(div);
 };
 
@@ -2652,10 +2654,12 @@ window.saveConsult = async function() {
   let meds = [];
   if (reqMed === 'Sí') {
     document.querySelectorAll('.medication-item').forEach(item => {
-      const name = item.querySelector('.med-name')?.value;
-      const dose = item.querySelector('.med-dose')?.value;
-      const freq = item.querySelector('.med-freq')?.value;
-      if (name) meds.push({ name, dose, freq });
+      const name       = item.querySelector('.med-name')?.value;
+      const dose       = item.querySelector('.med-dose')?.value;
+      const freq       = item.querySelector('.med-freq')?.value;
+      const days       = item.querySelector('.med-days')?.value;
+      const indication = item.querySelector('.med-indication')?.value;
+      if (name) meds.push({ name, dose, freq, days: days || undefined, indication: indication || undefined });
     });
   }
   const payload = {
@@ -2754,7 +2758,7 @@ window.printPrescription = function(idx) {
       <div><strong>Edad:</strong> ${ageStr}</div><div><strong>Peso:</strong> ${h.weight} kg | <strong>Talla:</strong> ${h.height} cm</div>
     </div>
     <div class="rx">Rx</div>
-    <ul class="med-list">${meds.map(m=>`<li><div class="med-name">${m.name}</div><div class="med-details"><strong>Dosis:</strong> ${m.dose} &nbsp;|&nbsp; <strong>Frecuencia:</strong> ${m.freq}</div></li>`).join('')}</ul>
+    <ul class="med-list">${meds.map(m=>`<li><div class="med-name">${m.name}</div><div class="med-details">${m.dose ? `<strong>Dosis:</strong> ${m.dose}` : ''}${m.freq ? ` &nbsp;|&nbsp; <strong>Frecuencia:</strong> ${m.freq}` : ''}${m.days ? ` &nbsp;|&nbsp; <strong>Duración:</strong> ${m.days}` : ''}</div>${m.indication ? `<div class="med-details" style="margin-top:4px;font-style:italic;">${m.indication}</div>` : ''}</li>`).join('')}</ul>
     <div class="footer"><div class="signature">Firma del Médico</div></div>
     <script>window.onload=function(){setTimeout(function(){window.print();},500);}<\/script>
   </body></html>`;
