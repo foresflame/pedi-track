@@ -2747,7 +2747,7 @@ function initChart() {
 window.navigate = function(view) {
   if (!currentUser && view !== 'login') { currentView = 'login'; }
   else if (currentUser && view === 'login') { currentView = getRoleDefaultView(currentUser.role); }
-  else if (currentUser && currentUser.role === 'tutor' && !['parent-profile','booking-calendar'].includes(view)) { currentView = 'parent-profile'; }
+  else if (currentUser && currentUser.role === 'tutor' && !['parent-profile','booking-calendar','doctor-public'].includes(view)) { currentView = 'parent-profile'; }
   else { currentView = view; }
   renderApp();
   window.scrollTo(0, 0);
