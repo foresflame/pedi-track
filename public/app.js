@@ -564,6 +564,7 @@ function renderParentProfile() {
             <button class="btn btn-primary" style="background:var(--white);color:var(--primary);" onclick="window.editingConsultId=null;window.editingConsultIndex=null;openModal('addConsultModal')">
               <i class="fa-solid fa-notes-medical"></i> Registrar Consulta
             </button>
+            <button class="btn" style="background:rgba(255,255,255,0.2);color:white;border:1px solid rgba(255,255,255,0.5);" onclick="openEditExpediente()" title="Editar expediente clínico"><i class="fa-solid fa-folder-open"></i> Expediente</button>
             ${p.tutor_id ? `<button class="btn" style="background:rgba(255,255,255,0.2);color:white;border:1px solid rgba(255,255,255,0.5);" onclick="openResetPasswordModal(${p.tutor_id})" title="Cambiar clave del tutor"><i class="fa-solid fa-key"></i></button>` : ''}
           ` : ''}
         </div>
@@ -1827,6 +1828,54 @@ window.cancelMyAppointment = async function(id) {
   } catch (e) { alert('Error al cancelar: ' + e.message); }
 };
 
+// === Edit Expediente (pediatra/admin) ===
+const EXPEDIENTE_FIELDS = [
+  'new-patient-name','patient-birth-date','Sexo','patient-curp','patient-birth-state','patient-birth-city',
+  'mom-name','dad-name','mom-education','dad-education','mom-occupation','dad-occupation',
+  'siblings-count','housing-type','pets','smokers-home',
+  'maternal-age','gesta-num','prenatal-ctrl','prenatal-visits','tobacco-preg','alcohol-preg','torch','obstetric-comp',
+  'delivery-type','gestational-weeks','birth-weight-kg','birth-height-cm','birth-head-cm',
+  'apgar-1','apgar-5','nicu-stay','nicu-days','phototherapy','neonatal-screening',
+  'breastfed','breastfed-months','feeding-type',
+  'known-allergies','surgery-detail','hosp-detail','chronic-meds'
+];
+
+window.openEditExpediente = function() {
+  if (!currentPatient) return;
+  const data = currentPatient.onboarding_data || {};
+  for (const f of EXPEDIENTE_FIELDS) {
+    const el = document.getElementById('ee-' + f);
+    if (el) el.value = data[f] || '';
+  }
+  openModal('editExpedienteModal');
+};
+
+window.saveExpediente = async function() {
+  if (!currentPatient) return;
+  const newData = { ...(currentPatient.onboarding_data || {}) };
+  for (const f of EXPEDIENTE_FIELDS) {
+    const el = document.getElementById('ee-' + f);
+    if (!el) continue;
+    const v = (el.value || '').trim();
+    if (v) newData[f] = v;
+    else delete newData[f]; // Permitir vaciar campos
+  }
+  try {
+    const body = { onboarding_data: newData };
+    // Sincronizar fecha de nacimiento al campo del paciente si cambió
+    if (newData['patient-birth-date']) body.birth_date = newData['patient-birth-date'];
+    if (newData['Sexo'])               body.sex        = newData['Sexo'];
+
+    const updated = await API.put(`/patients/${currentPatient.id}`, body);
+    currentPatient = { ...currentPatient, ...updated, onboarding_data: newData };
+    // Refrescar lista de pacientes para que aparezca actualizado en dashboards
+    if (currentUser.role !== 'tutor') patients = (await API.get('/patients')) || [];
+    closeModal('editExpedienteModal');
+    renderApp();
+    alert('Expediente actualizado correctamente');
+  } catch (e) { alert('Error: ' + e.message); }
+};
+
 // === Modals HTML ===
 function renderModals() {
   return `
@@ -2062,6 +2111,130 @@ function renderModals() {
           <button class="btn btn-primary" onclick="confirmApplyVaccine()">
             <i class="fa-solid fa-check"></i> Confirmar
           </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Edit Expediente Modal -->
+    <div class="modal-overlay" id="editExpedienteModal" onclick="if(event.target===this)closeModal('editExpedienteModal')">
+      <div class="modal-content" style="max-width:900px;max-height:90vh;overflow-y:auto;">
+        <div class="modal-header"><h2><i class="fa-solid fa-folder-open"></i> Editar Expediente</h2><button class="close-btn" onclick="closeModal('editExpedienteModal')"><i class="fa-solid fa-xmark"></i></button></div>
+        <p style="color:var(--text-light);font-size:0.85rem;margin-bottom:1rem;">Actualiza los datos del expediente clínico. Los campos en blanco se mantendrán sin cambios.</p>
+
+        <div id="editExpedienteForm">
+          <!-- Ficha de Identificación -->
+          <details class="expediente-accordion" open>
+            <summary class="expediente-summary"><div><i class="fa-solid fa-id-card" style="color:var(--secondary);"></i> Ficha de Identificación</div><i class="fa-solid fa-chevron-down accordion-icon"></i></summary>
+            <div class="expediente-accordion-content">
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+                <div class="form-group"><label>Nombre completo</label><input type="text" id="ee-new-patient-name" class="form-control"></div>
+                <div class="form-group"><label>Fecha de nacimiento</label><input type="date" id="ee-patient-birth-date" class="form-control"></div>
+                <div class="form-group"><label>Sexo</label>
+                  <select id="ee-Sexo" class="form-control"><option value="">—</option><option>Masculino</option><option>Femenino</option></select>
+                </div>
+                <div class="form-group"><label>CURP</label><input type="text" id="ee-patient-curp" class="form-control" maxlength="18" style="text-transform:uppercase;"></div>
+                <div class="form-group"><label>Estado de nacimiento</label><input type="text" id="ee-patient-birth-state" class="form-control"></div>
+                <div class="form-group"><label>Ciudad de nacimiento</label><input type="text" id="ee-patient-birth-city" class="form-control"></div>
+                <div class="form-group"><label>Nombre de la madre</label><input type="text" id="ee-mom-name" class="form-control"></div>
+                <div class="form-group"><label>Nombre del padre</label><input type="text" id="ee-dad-name" class="form-control"></div>
+              </div>
+            </div>
+          </details>
+
+          <!-- Antecedentes Patológicos (DESTACADO con alergias) -->
+          <details class="expediente-accordion" open>
+            <summary class="expediente-summary" style="background:linear-gradient(135deg,#fef2f2,#fee2e2);">
+              <div><i class="fa-solid fa-triangle-exclamation" style="color:#dc2626;"></i> <strong>Antecedentes Patológicos & Alergias</strong></div>
+              <i class="fa-solid fa-chevron-down accordion-icon"></i>
+            </summary>
+            <div class="expediente-accordion-content">
+              <div class="form-group"><label style="color:#dc2626;font-weight:600;">⚠ Alergias conocidas</label><input type="text" id="ee-known-allergies" class="form-control" placeholder="Ej. Polen, penicilina, látex... o 'Ninguna'" style="border:2px solid #fca5a5;"></div>
+              <div class="form-group"><label>Cirugías o procedimientos previos</label><textarea id="ee-surgery-detail" class="form-control" rows="2" placeholder="Describir cirugías previas, o 'Ninguna'"></textarea></div>
+              <div class="form-group"><label>Hospitalizaciones previas</label><textarea id="ee-hosp-detail" class="form-control" rows="2" placeholder="Motivo y duración, o 'Ninguna'"></textarea></div>
+              <div class="form-group"><label>Medicamentos crónicos actuales</label><input type="text" id="ee-chronic-meds" class="form-control" placeholder="Ej. Fenobarbital, salbutamol... o 'Ninguno'"></div>
+            </div>
+          </details>
+
+          <!-- Contexto Familiar -->
+          <details class="expediente-accordion">
+            <summary class="expediente-summary"><div><i class="fa-solid fa-house-chimney" style="color:var(--secondary);"></i> Contexto Familiar</div><i class="fa-solid fa-chevron-down accordion-icon"></i></summary>
+            <div class="expediente-accordion-content">
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+                <div class="form-group"><label>Escolaridad madre</label><input type="text" id="ee-mom-education" class="form-control"></div>
+                <div class="form-group"><label>Escolaridad padre</label><input type="text" id="ee-dad-education" class="form-control"></div>
+                <div class="form-group"><label>Ocupación madre</label><input type="text" id="ee-mom-occupation" class="form-control"></div>
+                <div class="form-group"><label>Ocupación padre</label><input type="text" id="ee-dad-occupation" class="form-control"></div>
+                <div class="form-group"><label>Hermanos mayores</label><input type="number" id="ee-siblings-count" class="form-control" min="0"></div>
+                <div class="form-group"><label>Tipo de vivienda</label><input type="text" id="ee-housing-type" class="form-control"></div>
+                <div class="form-group"><label>Mascotas</label><input type="text" id="ee-pets" class="form-control"></div>
+                <div class="form-group"><label>Fumadores en hogar</label><input type="text" id="ee-smokers-home" class="form-control"></div>
+              </div>
+            </div>
+          </details>
+
+          <!-- Antecedentes Prenatales -->
+          <details class="expediente-accordion">
+            <summary class="expediente-summary"><div><i class="fa-solid fa-person-pregnant" style="color:var(--secondary);"></i> Antecedentes Prenatales</div><i class="fa-solid fa-chevron-down accordion-icon"></i></summary>
+            <div class="expediente-accordion-content">
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+                <div class="form-group"><label>Edad materna al embarazo</label><input type="number" id="ee-maternal-age" class="form-control"></div>
+                <div class="form-group"><label>Número de gestación</label><input type="number" id="ee-gesta-num" class="form-control"></div>
+                <div class="form-group"><label>Control prenatal</label><input type="text" id="ee-prenatal-ctrl" class="form-control"></div>
+                <div class="form-group"><label>Consultas prenatales</label><input type="number" id="ee-prenatal-visits" class="form-control"></div>
+                <div class="form-group"><label>Tabaquismo en embarazo</label><input type="text" id="ee-tobacco-preg" class="form-control"></div>
+                <div class="form-group"><label>Alcohol en embarazo</label><input type="text" id="ee-alcohol-preg" class="form-control"></div>
+              </div>
+              <div class="form-group"><label>Infecciones TORCH</label><input type="text" id="ee-torch" class="form-control"></div>
+              <div class="form-group"><label>Complicaciones obstétricas</label><textarea id="ee-obstetric-comp" class="form-control" rows="2"></textarea></div>
+            </div>
+          </details>
+
+          <!-- Datos Perinatales -->
+          <details class="expediente-accordion">
+            <summary class="expediente-summary"><div><i class="fa-solid fa-baby" style="color:var(--secondary);"></i> Datos Perinatales</div><i class="fa-solid fa-chevron-down accordion-icon"></i></summary>
+            <div class="expediente-accordion-content">
+              <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem;">
+                <div class="form-group"><label>Tipo de parto</label>
+                  <select id="ee-delivery-type" class="form-control"><option value="">—</option><option>Vaginal</option><option>Cesárea</option><option>Instrumentado</option></select>
+                </div>
+                <div class="form-group"><label>Semanas de gestación</label><input type="number" id="ee-gestational-weeks" class="form-control" min="22" max="44"></div>
+                <div class="form-group"><label>Peso al nacer (kg)</label><input type="number" id="ee-birth-weight-kg" class="form-control" step="0.01"></div>
+                <div class="form-group"><label>Talla al nacer (cm)</label><input type="number" id="ee-birth-height-cm" class="form-control" step="0.1"></div>
+                <div class="form-group"><label>PC al nacer (cm)</label><input type="number" id="ee-birth-head-cm" class="form-control" step="0.1"></div>
+                <div class="form-group"><label>Apgar 1 min</label><input type="number" id="ee-apgar-1" class="form-control" min="0" max="10"></div>
+                <div class="form-group"><label>Apgar 5 min</label><input type="number" id="ee-apgar-5" class="form-control" min="0" max="10"></div>
+                <div class="form-group"><label>UCI neonatal</label><input type="text" id="ee-nicu-stay" class="form-control"></div>
+                <div class="form-group"><label>Días en UCI</label><input type="number" id="ee-nicu-days" class="form-control"></div>
+                <div class="form-group"><label>Fototerapia</label><input type="text" id="ee-phototherapy" class="form-control"></div>
+                <div class="form-group" style="grid-column:span 2;"><label>Tamiz neonatal</label><input type="text" id="ee-neonatal-screening" class="form-control"></div>
+              </div>
+            </div>
+          </details>
+
+          <!-- Alimentación -->
+          <details class="expediente-accordion">
+            <summary class="expediente-summary"><div><i class="fa-solid fa-utensils" style="color:var(--secondary);"></i> Alimentación</div><i class="fa-solid fa-chevron-down accordion-icon"></i></summary>
+            <div class="expediente-accordion-content">
+              <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem;">
+                <div class="form-group"><label>Lactancia materna</label>
+                  <select id="ee-breastfed" class="form-control"><option value="">—</option><option>Sí</option><option>No</option></select>
+                </div>
+                <div class="form-group"><label>Meses de lactancia</label><input type="number" id="ee-breastfed-months" class="form-control" min="0" max="36"></div>
+                <div class="form-group"><label>Tipo de alimentación</label>
+                  <select id="ee-feeding-type" class="form-control">
+                    <option value="">—</option><option>Leche materna exclusiva</option><option>Fórmula exclusiva</option>
+                    <option>Lactancia mixta</option><option>Ablactación iniciada</option>
+                    <option>Alimentación complementaria</option><option>Dieta familiar</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          </details>
+        </div>
+
+        <div style="display:flex;gap:0.75rem;justify-content:flex-end;margin-top:1.25rem;padding-top:1rem;border-top:1px solid var(--bg-color);">
+          <button class="btn btn-secondary" onclick="closeModal('editExpedienteModal')">Cancelar</button>
+          <button class="btn btn-primary" onclick="saveExpediente()"><i class="fa-solid fa-floppy-disk"></i> Guardar Cambios</button>
         </div>
       </div>
     </div>
