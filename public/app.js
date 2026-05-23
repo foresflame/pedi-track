@@ -1250,6 +1250,8 @@ window.saveOwnProfile = async function() {
 async function loadDoctorPublic() {
   const did = window.viewingDoctorId;
   if (!did) return;
+  // Evita re-fetch si ya está cargado el mismo doctor (previene loop renderApp)
+  if (publicDoctor && publicDoctor.id === did) return;
   try { publicDoctor = await API.get(`/users/${did}/public`); renderApp(); } catch(e) { console.error(e.message); }
 }
 window.viewDoctorProfile = function(doctorId) {
