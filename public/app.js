@@ -545,7 +545,6 @@ function renderParentProfile() {
   return `
     <div class="profile-view">
       ${backBtn}
-      ${allergyBanner}
       <div class="profile-header">
         <div class="profile-avatar">${p.name.charAt(0).toUpperCase()}</div>
         <div style="z-index:2;">
@@ -569,6 +568,8 @@ function renderParentProfile() {
           ` : ''}
         </div>
       </div>
+
+      ${allergyBanner}
 
       <div class="profile-stats">
         <div class="stat-card"><div class="stat-label">Peso Actual</div><div class="stat-value">${p.weight||0} <span style="font-size:1.2rem;color:var(--text-dark)">kg</span></div><p style="color:var(--secondary);font-size:0.9rem;"><i class="fa-solid fa-arrow-trend-up"></i> Actualizado</p></div>
