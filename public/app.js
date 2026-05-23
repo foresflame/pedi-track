@@ -29,6 +29,7 @@ let consultations   = [];
 let patientVaccinations  = [];
 let neuroAssessments     = [];
 let todayAppointments = [];
+let doctorAppointments = []; // todas las citas del médico (para badges en cards)
 let currentPatientId  = null;
 let currentView     = 'login';
 let currentOnboardingStep = 1;
@@ -85,7 +86,8 @@ async function refreshData() {
       }
       if (currentUser.role === 'pediatra') {
         const today = new Date().toISOString().slice(0, 10);
-        todayAppointments = (await API.get(`/appointments?date=${today}`)) || [];
+        todayAppointments  = (await API.get(`/appointments?date=${today}`)) || [];
+        doctorAppointments = (await API.get('/appointments')) || [];
       }
     }
   } catch (e) { console.error('refreshData:', e.message); }
@@ -337,6 +339,13 @@ function renderDoctorDashboard() {
       `).join('')}
     </div>` : '';
 
+  // Mapa: patient_id → próxima cita pendiente (solicitud sin confirmar)
+  const pendingByPatient = {};
+  doctorAppointments
+    .filter(a => a.status === 'pendiente' && a.patient_id && a.date >= today)
+    .sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time))
+    .forEach(a => { if (!pendingByPatient[a.patient_id]) pendingByPatient[a.patient_id] = a; });
+
   const patientsHtml = visiblePatients.length > 0
     ? visiblePatients.map(p => {
       const nvd = p.next_visit_date;
@@ -345,6 +354,21 @@ function renderDoctorDashboard() {
         const dLeft = Math.round((new Date(nvd) - new Date(today)) / 86_400_000);
         if (dLeft < 0)      nvBadge = `<span style="font-size:0.72rem;background:#fef2f2;color:#ef4444;border-radius:4px;padding:0.15rem 0.4rem;margin-left:0.3rem;"><i class="fa-solid fa-triangle-exclamation"></i> Visita vencida</span>`;
         else if (dLeft <= 7) nvBadge = `<span style="font-size:0.72rem;background:#fff7ed;color:#f59e0b;border-radius:4px;padding:0.15rem 0.4rem;margin-left:0.3rem;"><i class="fa-solid fa-bell"></i> Visita en ${dLeft}d</span>`;
+      }
+      // Badge de cita pendiente solicitada por el tutor
+      const pending = pendingByPatient[p.id];
+      let pendingBlock = '';
+      if (pending) {
+        const dt = new Date(pending.date + 'T12:00:00');
+        const dateLabel = dt.toLocaleDateString('es-MX', { weekday:'short', day:'numeric', month:'short' });
+        pendingBlock = `
+        <div style="margin-top:0.6rem;background:linear-gradient(135deg,#fef3c7,#fde68a);border-left:3px solid #f59e0b;border-radius:6px;padding:0.4rem 0.6rem;display:flex;align-items:center;gap:0.5rem;font-size:0.78rem;">
+          <i class="fa-solid fa-bell" style="color:#d97706;"></i>
+          <div style="flex:1;line-height:1.3;">
+            <div style="font-weight:700;color:#92400e;">Cita solicitada</div>
+            <div style="color:#78350f;">${dateLabel} · <strong>${pending.time}</strong></div>
+          </div>
+        </div>`;
       }
       return `
       <div class="patient-card" onclick="viewPatient(${p.id})">
@@ -356,6 +380,7 @@ function renderDoctorDashboard() {
             <span><i class="fa-solid fa-weight-scale" style="color:var(--secondary)"></i> ${p.weight} kg</span>
             <span><i class="fa-solid fa-ruler-vertical" style="color:var(--secondary)"></i> ${p.height} cm</span>
           </div>
+          ${pendingBlock}
         </div>
         <i class="fa-solid fa-chevron-right" style="margin-left:auto;color:var(--text-light);"></i>
       </div>`;
@@ -2620,7 +2645,7 @@ window.handleLogin = async function() {
 
 window.handleLogout = function() {
   currentUser = null; patients = []; pediatricians = []; currentPatient = null;
-  consultations = []; todayAppointments = []; currentPatientId = null;
+  consultations = []; todayAppointments = []; doctorAppointments = []; currentPatientId = null;
   sessionStorage.clear(); currentView = 'login'; renderApp();
 };
 
@@ -2946,7 +2971,8 @@ window.updateAppointmentStatus = async function(id, status) {
   try {
     await API.put(`/appointments/${id}/status`, { status });
     const today = new Date().toISOString().slice(0, 10);
-    todayAppointments = (await API.get(`/appointments?date=${today}`)) || [];
+    todayAppointments  = (await API.get(`/appointments?date=${today}`)) || [];
+    doctorAppointments = (await API.get('/appointments')) || [];
     renderApp();
   } catch (e) { alert('Error: '+e.message); }
 };
