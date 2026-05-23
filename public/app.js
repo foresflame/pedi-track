@@ -203,28 +203,77 @@ function renderAdminDashboard() {
       </div>
 
       <div class="history-section" style="margin-top:2rem;">
-        <h2>Asignación de Pacientes</h2>
-        <p style="color:var(--text-light);font-size:0.9rem;margin-bottom:1rem;">Administra qué pediatra atiende a cada paciente.</p>
-        <div style="background:white;padding:1.5rem;border-radius:15px;box-shadow:var(--card-shadow);overflow-x:auto;">
-          <table style="width:100%;text-align:left;border-collapse:collapse;">
-            <thead><tr style="border-bottom:2px solid var(--bg-color);color:var(--text-light);">
-              <th style="padding:1rem 0;">Paciente</th><th style="padding:1rem 0;">Edad</th><th style="padding:1rem 0;">Pediatra Asignado</th><th style="padding:1rem 0;text-align:right;">Acción</th>
-            </tr></thead>
-            <tbody>
-              ${patients.map(p => `
+        <h2>Pacientes por Pediatra</h2>
+        <p style="color:var(--text-light);font-size:0.9rem;margin-bottom:1rem;">Cada pediatra con sus pacientes asignados. Click en un paciente para ver el expediente completo.</p>
+
+        ${(() => {
+          // Agrupar pacientes por doctor_id
+          const groups = pediatricians.map(doc => ({
+            doctor:   doc,
+            patients: patients.filter(p => p.doctor_id === doc.id)
+          }));
+          const orphans = patients.filter(p => !p.doctor_id);
+          if (orphans.length) groups.push({ doctor: null, patients: orphans });
+
+          const renderPatientRow = (p) => {
+            const age = calculateAgeString(p.birth_date || (p.onboarding_data && p.onboarding_data['Fecha de nacimiento']));
+            const allergies = (p.onboarding_data && p.onboarding_data['known-allergies'] || '').trim();
+            const hasAllergies = allergies && !/^(ninguna|ninguno|no|n\/a|na|sin alergias?)$/i.test(allergies);
+            return `
               <tr style="border-bottom:1px solid var(--bg-color);">
-                <td style="padding:1rem 0;font-weight:500;">${p.name}</td>
-                <td style="padding:1rem 0;color:var(--text-light);">${calculateAgeString(p.birth_date || (p.onboarding_data && p.onboarding_data['Fecha de nacimiento']))}</td>
-                <td style="padding:1rem 0;">${p.doctor_name || '<span style="color:#ef4444;">Sin asignar</span>'}</td>
-                <td style="padding:1rem 0;text-align:right;display:flex;gap:0.4rem;justify-content:flex-end;">
-                  <button class="btn btn-secondary" style="padding:0.3rem 0.8rem;font-size:0.8rem;" onclick="openAssignPatientModal(${p.id})"><i class="fa-solid fa-user-doctor"></i> Asignar</button>
-                  <button class="btn" style="padding:0.3rem 0.6rem;font-size:0.8rem;background:transparent;color:#ef4444;box-shadow:none;" onclick="deletePatient(${p.id})"><i class="fa-solid fa-trash"></i></button>
+                <td style="padding:0.9rem 0.5rem;font-weight:500;cursor:pointer;color:var(--primary);" onclick="viewPatient(${p.id})">
+                  ${p.name}
+                  ${hasAllergies ? `<span style="display:inline-block;margin-left:0.4rem;background:#fee2e2;color:#991b1b;font-size:0.65rem;font-weight:700;padding:0.1rem 0.45rem;border-radius:10px;text-transform:uppercase;letter-spacing:0.05em;" title="${allergies.replace(/"/g,'&quot;')}"><i class="fa-solid fa-triangle-exclamation"></i> Alergias</span>` : ''}
                 </td>
-              </tr>`).join('')}
-              ${patients.length === 0 ? '<tr><td colspan="4" style="padding:1rem 0;text-align:center;color:var(--text-light);">No hay pacientes registrados.</td></tr>' : ''}
-            </tbody>
-          </table>
-        </div>
+                <td style="padding:0.9rem 0.5rem;color:var(--text-light);font-size:0.85rem;">${age}</td>
+                <td style="padding:0.9rem 0.5rem;font-size:0.85rem;">
+                  ${p.tutor_name ? `<div style="font-weight:500;">${p.tutor_name}</div><div style="color:var(--text-light);font-size:0.78rem;">${p.tutor_email || '—'}</div>` : '<span style="color:var(--text-light);font-style:italic;">Sin tutor</span>'}
+                </td>
+                <td style="padding:0.9rem 0.5rem;text-align:right;">
+                  <div style="display:inline-flex;gap:0.3rem;flex-wrap:wrap;justify-content:flex-end;">
+                    ${p.tutor_id ? `<button class="btn" style="padding:0.3rem 0.55rem;font-size:0.72rem;background:#fef3c7;color:#92400e;box-shadow:none;border:1px solid #fbbf24;" onclick="openResetPasswordModal(${p.tutor_id})" title="Resetear contraseña del tutor"><i class="fa-solid fa-key"></i> Clave</button>` : ''}
+                    <button class="btn btn-secondary" style="padding:0.3rem 0.55rem;font-size:0.72rem;" onclick="openAssignPatientModal(${p.id})" title="Reasignar pediatra"><i class="fa-solid fa-user-doctor"></i></button>
+                    <button class="btn" style="padding:0.3rem 0.55rem;font-size:0.72rem;background:transparent;color:#ef4444;box-shadow:none;" onclick="deletePatient(${p.id})" title="Eliminar paciente"><i class="fa-solid fa-trash"></i></button>
+                  </div>
+                </td>
+              </tr>`;
+          };
+
+          return groups.map(g => `
+            <div style="background:white;border-radius:15px;box-shadow:var(--card-shadow);margin-bottom:1.25rem;overflow:hidden;">
+              <div style="background:${g.doctor ? 'linear-gradient(135deg,var(--primary),var(--secondary))' : 'linear-gradient(135deg,#94a3b8,#64748b)'};color:white;padding:0.85rem 1.25rem;display:flex;justify-content:space-between;align-items:center;">
+                <div>
+                  <div style="font-size:1.05rem;font-weight:600;">
+                    <i class="fa-solid ${g.doctor ? 'fa-user-doctor' : 'fa-triangle-exclamation'}"></i>
+                    ${g.doctor ? g.doctor.name : 'Sin pediatra asignado'}
+                  </div>
+                  ${g.doctor ? `<div style="font-size:0.78rem;opacity:0.85;">${g.doctor.email}</div>` : ''}
+                </div>
+                <div style="font-size:0.85rem;background:rgba(255,255,255,0.2);padding:0.3rem 0.75rem;border-radius:20px;">${g.patients.length} paciente${g.patients.length === 1 ? '' : 's'}</div>
+              </div>
+              ${g.patients.length === 0 ? `
+                <div style="padding:1.25rem;text-align:center;color:var(--text-light);font-size:0.85rem;font-style:italic;">Sin pacientes asignados.</div>
+              ` : `
+                <div style="overflow-x:auto;">
+                  <table style="width:100%;text-align:left;border-collapse:collapse;">
+                    <thead><tr style="border-bottom:2px solid var(--bg-color);color:var(--text-light);font-size:0.78rem;text-transform:uppercase;letter-spacing:0.04em;">
+                      <th style="padding:0.65rem 0.5rem;">Paciente</th>
+                      <th style="padding:0.65rem 0.5rem;">Edad</th>
+                      <th style="padding:0.65rem 0.5rem;">Tutor / Correo</th>
+                      <th style="padding:0.65rem 0.5rem;text-align:right;">Acciones</th>
+                    </tr></thead>
+                    <tbody>
+                      ${g.patients.map(renderPatientRow).join('')}
+                    </tbody>
+                  </table>
+                </div>`}
+            </div>`).join('');
+        })()}
+        ${patients.length === 0 ? '<div style="background:white;padding:2rem;border-radius:15px;text-align:center;color:var(--text-light);">No hay pacientes registrados.</div>' : ''}
+
+        <p style="color:var(--text-light);font-size:0.78rem;margin-top:0.5rem;font-style:italic;">
+          <i class="fa-solid fa-circle-info"></i> Las contraseñas se almacenan encriptadas y no pueden mostrarse. Usa el botón <strong>Clave</strong> para asignar una nueva al tutor.
+        </p>
       </div>
     </div>
   `;
