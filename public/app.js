@@ -444,8 +444,29 @@ function renderParentProfile() {
       }).join('')
     : '<p style="color:var(--text-light);padding:1rem 0;">No hay consultas registradas aún.</p>';
 
+  // Banner de alergias — visible para médico/admin
+  const allergies = (p.onboarding_data && p.onboarding_data['known-allergies'] || '').trim();
+  const hasAllergies = allergies && !/^(ninguna|ninguno|no|n\/a|na|sin alergias?)$/i.test(allergies);
+  const allergyBanner = (hasAllergies && currentUser.role !== 'tutor') ? `
+    <div style="background:linear-gradient(135deg,#fef2f2,#fee2e2);border:2px solid #ef4444;border-left:6px solid #dc2626;border-radius:10px;padding:0.85rem 1.1rem;margin-bottom:1.25rem;display:flex;align-items:center;gap:0.9rem;box-shadow:0 2px 8px rgba(239,68,68,0.12);">
+      <i class="fa-solid fa-triangle-exclamation" style="font-size:1.6rem;color:#dc2626;flex-shrink:0;"></i>
+      <div style="flex:1;">
+        <div style="font-weight:700;color:#991b1b;font-size:0.78rem;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:0.15rem;">⚠ Alergias conocidas</div>
+        <div style="color:#7f1d1d;font-size:1rem;font-weight:600;">${allergies}</div>
+      </div>
+    </div>` : '';
+
+  // Botón Volver para médico/admin
+  const backView = currentUser.role === 'admin' ? 'admin-dashboard' : 'doctor-dashboard';
+  const backBtn = currentUser.role !== 'tutor' ? `
+    <button class="btn btn-secondary" style="margin-bottom:1rem;" onclick="navigate('${backView}')">
+      <i class="fa-solid fa-arrow-left"></i> Volver a Mis Pacientes
+    </button>` : '';
+
   return `
     <div class="profile-view">
+      ${backBtn}
+      ${allergyBanner}
       <div class="profile-header">
         <div class="profile-avatar">${p.name.charAt(0).toUpperCase()}</div>
         <div style="z-index:2;">
