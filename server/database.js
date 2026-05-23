@@ -205,6 +205,23 @@ function runMigrations() {
   // Por si la tabla ya existe sin NOT NULL pero sin la columna label
   try { db.prepare('ALTER TABLE appointments ADD COLUMN label TEXT').run(); } catch(e) {}
 
+  // Perfil extendido del pediatra
+  const userProfileCols = [
+    'ALTER TABLE users ADD COLUMN specialty       TEXT',
+    'ALTER TABLE users ADD COLUMN license         TEXT',
+    'ALTER TABLE users ADD COLUMN phone           TEXT',
+    'ALTER TABLE users ADD COLUMN office_address  TEXT',
+    'ALTER TABLE users ADD COLUMN description     TEXT',
+    'ALTER TABLE users ADD COLUMN photo           TEXT',
+    'ALTER TABLE users ADD COLUMN social_facebook  TEXT',
+    'ALTER TABLE users ADD COLUMN social_instagram TEXT',
+    'ALTER TABLE users ADD COLUMN social_whatsapp  TEXT',
+    'ALTER TABLE users ADD COLUMN social_website   TEXT',
+  ];
+  for (const sql of userProfileCols) {
+    try { db.prepare(sql).run(); } catch (e) {}
+  }
+
   console.log('✔ Migraciones ejecutadas');
 }
 

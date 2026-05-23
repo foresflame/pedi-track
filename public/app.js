@@ -118,12 +118,16 @@ function renderApp() {
   else if (currentView === 'onboarding-success')  html += renderOnboardingSuccess();
   else if (currentView === 'availability-settings') html += renderAvailabilitySettings();
   else if (currentView === 'booking-calendar')    html += renderBookingCalendar();
+  else if (currentView === 'doctor-profile-edit') html += renderDoctorProfileEdit();
+  else if (currentView === 'doctor-public')       html += renderDoctorPublic();
 
   html += `</main>` + renderModals();
   app.innerHTML = html;
 
   if (currentView === 'parent-profile')       initChart();
   if (currentView === 'availability-settings') { loadAvailability(); loadDoctorCalendar(); }
+  if (currentView === 'doctor-profile-edit')  loadOwnProfile();
+  if (currentView === 'doctor-public')        loadDoctorPublic();
 }
 
 // === Views ===
@@ -399,6 +403,7 @@ function renderDoctorDashboard() {
           <p style="color:var(--text-light);">${patients.length > 0 ? `${patients.length} paciente(s) registrado(s).` : 'Bienvenido a tu panel.'}</p>
         </div>
         <div style="display:flex;gap:1rem;flex-wrap:wrap;align-items:center;">
+          <button class="btn btn-secondary" onclick="navigate('doctor-profile-edit')"><i class="fa-solid fa-id-card"></i> Mi Perfil</button>
           <button class="btn btn-secondary" onclick="navigate('availability-settings')"><i class="fa-regular fa-calendar"></i> Disponibilidad</button>
           <button class="btn btn-primary" onclick="navigate('patient-onboarding')"><i class="fa-solid fa-plus"></i> Nuevo Paciente</button>
         </div>
@@ -545,7 +550,10 @@ function renderParentProfile() {
         <div class="profile-avatar">${p.name.charAt(0).toUpperCase()}</div>
         <div style="z-index:2;">
           <h1 style="font-size:2.5rem;margin-bottom:0.5rem;">${p.name}</h1>
-          <p style="font-size:1.2rem;opacity:0.9;">${calculateAgeString(birthDate)} • ${doctorName}</p>
+          <p style="font-size:1.2rem;opacity:0.9;">
+            ${calculateAgeString(birthDate)} •
+            ${p.doctor_id ? `<a href="#" onclick="event.preventDefault();event.stopPropagation();viewDoctorProfile(${p.doctor_id})" style="color:white;text-decoration:underline;cursor:pointer;">${doctorName}</a>` : doctorName}
+          </p>
         </div>
         <div style="margin-left:auto;display:flex;gap:0.8rem;flex-wrap:wrap;z-index:2;">
           ${currentUser.role === 'tutor' && p.doctor_id ? `
@@ -1096,6 +1104,195 @@ function renderOnboardingSuccess() {
       </div>
     </div>
   `;
+}
+
+// === Doctor Profile (own edit + public view) ===
+let myProfile = null;
+let publicDoctor = null;
+
+async function loadOwnProfile() {
+  try {
+    myProfile = await API.get('/users/me');
+    fillProfileForm();
+  } catch(e) { console.error('loadOwnProfile:', e.message); }
+}
+
+function fillProfileForm() {
+  if (!myProfile) return;
+  const set = (id, val) => { const el = document.getElementById(id); if (el) el.value = val || ''; };
+  set('dp-name', myProfile.name);
+  set('dp-email', myProfile.email);
+  set('dp-specialty', myProfile.specialty);
+  set('dp-license', myProfile.license);
+  set('dp-phone', myProfile.phone);
+  set('dp-office', myProfile.office_address);
+  set('dp-description', myProfile.description);
+  set('dp-fb', myProfile.social_facebook);
+  set('dp-ig', myProfile.social_instagram);
+  set('dp-wa', myProfile.social_whatsapp);
+  set('dp-web', myProfile.social_website);
+  const preview = document.getElementById('dp-photo-preview');
+  if (preview && myProfile.photo) preview.src = myProfile.photo;
+}
+
+function renderDoctorProfileEdit() {
+  return `
+    <div class="dashboard">
+      <div class="dashboard-header">
+        <div>
+          <h1 style="font-size:2rem;">Mi Perfil Profesional</h1>
+          <p style="color:var(--text-light);">Esta información será visible para los tutores de tus pacientes.</p>
+        </div>
+        <button class="btn btn-secondary" onclick="navigate('doctor-dashboard')"><i class="fa-solid fa-arrow-left"></i> Volver</button>
+      </div>
+
+      <div style="display:grid;grid-template-columns:280px 1fr;gap:2rem;background:white;padding:2rem;border-radius:15px;box-shadow:var(--card-shadow);">
+        <!-- Foto -->
+        <div style="text-align:center;">
+          <div style="width:200px;height:200px;border-radius:50%;background:var(--primary-light);margin:0 auto 1rem;overflow:hidden;border:4px solid var(--primary);display:flex;align-items:center;justify-content:center;">
+            <img id="dp-photo-preview" src="" alt="" style="width:100%;height:100%;object-fit:cover;display:block;" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"/>
+            <div style="display:none;width:100%;height:100%;align-items:center;justify-content:center;color:var(--primary);font-size:5rem;"><i class="fa-solid fa-user-doctor"></i></div>
+          </div>
+          <label class="btn btn-secondary" style="cursor:pointer;width:100%;display:inline-block;">
+            <i class="fa-solid fa-camera"></i> Cambiar foto
+            <input type="file" accept="image/*" style="display:none;" onchange="onPhotoSelected(event)">
+          </label>
+          <button class="btn" style="margin-top:0.5rem;background:transparent;color:#ef4444;width:100%;box-shadow:none;font-size:0.85rem;" onclick="document.getElementById('dp-photo-preview').src='';myProfile.photo=null;document.getElementById('dp-photo-preview').onerror()">Quitar foto</button>
+        </div>
+
+        <!-- Campos -->
+        <div>
+          <h3 style="margin-bottom:1rem;color:var(--primary);">Información Profesional</h3>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+            <div class="form-group"><label>Nombre completo *</label><input id="dp-name" class="form-control" type="text" placeholder="Dr. Nombre Apellido"></div>
+            <div class="form-group"><label>Correo electrónico *</label><input id="dp-email" class="form-control" type="email"></div>
+            <div class="form-group"><label>Especialidad</label><input id="dp-specialty" class="form-control" type="text" placeholder="Ej. Pediatría general, Neonatología"></div>
+            <div class="form-group"><label>Cédula profesional</label><input id="dp-license" class="form-control" type="text" placeholder="Ej. 12345678"></div>
+            <div class="form-group"><label>Teléfono</label><input id="dp-phone" class="form-control" type="tel" placeholder="Ej. +52 999 123 4567"></div>
+            <div class="form-group"><label>Dirección del consultorio</label><input id="dp-office" class="form-control" type="text" placeholder="Ej. Av. Reforma 123, Col. Centro"></div>
+          </div>
+          <div class="form-group"><label>Acerca de mí</label><textarea id="dp-description" class="form-control" rows="4" placeholder="Cuéntale a los tutores sobre tu experiencia, formación y enfoque..."></textarea></div>
+
+          <h3 style="margin:1.5rem 0 1rem;color:var(--primary);">Redes Sociales</h3>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+            <div class="form-group"><label><i class="fa-brands fa-facebook" style="color:#1877f2;"></i> Facebook</label><input id="dp-fb" class="form-control" type="url" placeholder="https://facebook.com/tu-pagina"></div>
+            <div class="form-group"><label><i class="fa-brands fa-instagram" style="color:#e1306c;"></i> Instagram</label><input id="dp-ig" class="form-control" type="url" placeholder="https://instagram.com/tu-usuario"></div>
+            <div class="form-group"><label><i class="fa-brands fa-whatsapp" style="color:#25d366;"></i> WhatsApp (número)</label><input id="dp-wa" class="form-control" type="tel" placeholder="Ej. 5219991234567"></div>
+            <div class="form-group"><label><i class="fa-solid fa-globe" style="color:var(--primary);"></i> Sitio web</label><input id="dp-web" class="form-control" type="url" placeholder="https://tu-sitio.com"></div>
+          </div>
+
+          <h3 style="margin:1.5rem 0 1rem;color:var(--primary);">Cambiar contraseña</h3>
+          <div class="form-group" style="max-width:400px;">
+            <input id="dp-password" class="form-control" type="password" placeholder="Dejar en blanco para no cambiar">
+          </div>
+
+          <button class="btn btn-primary" style="margin-top:1rem;" onclick="saveOwnProfile()"><i class="fa-solid fa-floppy-disk"></i> Guardar cambios</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+window.onPhotoSelected = function(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  if (file.size > 5 * 1024 * 1024) { alert('La imagen no puede exceder 5 MB'); return; }
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    // Redimensionar a max 400px de ancho con canvas
+    const img = new Image();
+    img.onload = () => {
+      const MAX = 400;
+      const scale = Math.min(1, MAX / img.width);
+      const canvas = document.createElement('canvas');
+      canvas.width  = img.width  * scale;
+      canvas.height = img.height * scale;
+      canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+      if (myProfile) myProfile.photo = dataUrl;
+      const preview = document.getElementById('dp-photo-preview');
+      if (preview) { preview.src = dataUrl; preview.style.display = 'block'; preview.nextElementSibling.style.display = 'none'; }
+    };
+    img.src = ev.target.result;
+  };
+  reader.readAsDataURL(file);
+};
+
+window.saveOwnProfile = async function() {
+  const val = id => document.getElementById(id)?.value.trim() || '';
+  const password = document.getElementById('dp-password')?.value;
+  const body = {
+    name:             val('dp-name'),
+    email:            val('dp-email'),
+    specialty:        val('dp-specialty'),
+    license:          val('dp-license'),
+    phone:            val('dp-phone'),
+    office_address:   val('dp-office'),
+    description:      val('dp-description'),
+    photo:            myProfile?.photo || null,
+    social_facebook:  val('dp-fb'),
+    social_instagram: val('dp-ig'),
+    social_whatsapp:  val('dp-wa'),
+    social_website:   val('dp-web'),
+  };
+  if (password) body.password = password;
+  if (!body.name || !body.email) { alert('Nombre y correo son obligatorios'); return; }
+  try {
+    const updated = await API.put('/users/me', body);
+    myProfile = updated;
+    // Actualizar nombre del usuario en sesión por si cambió
+    if (currentUser) { currentUser.name = updated.name; currentUser.email = updated.email; sessionStorage.setItem('peditrack_user', JSON.stringify(currentUser)); }
+    alert('Perfil actualizado correctamente');
+    navigate('doctor-dashboard');
+  } catch(e) { alert('Error: ' + e.message); }
+};
+
+// === Public Doctor View (for tutors) ===
+async function loadDoctorPublic() {
+  const did = window.viewingDoctorId;
+  if (!did) return;
+  try { publicDoctor = await API.get(`/users/${did}/public`); renderApp(); } catch(e) { console.error(e.message); }
+}
+window.viewDoctorProfile = function(doctorId) {
+  window.viewingDoctorId = doctorId;
+  publicDoctor = null;
+  navigate('doctor-public');
+};
+
+function renderDoctorPublic() {
+  const d = publicDoctor;
+  if (!d) return `<div class="dashboard"><p style="text-align:center;padding:3rem;color:var(--text-light);">Cargando...</p></div>`;
+  const backView = currentUser.role === 'tutor' ? 'parent-profile' : 'doctor-dashboard';
+  const social = [
+    d.social_facebook  ? `<a href="${d.social_facebook}"  target="_blank" rel="noopener" style="color:#1877f2;font-size:1.6rem;" title="Facebook"><i class="fa-brands fa-facebook"></i></a>` : '',
+    d.social_instagram ? `<a href="${d.social_instagram}" target="_blank" rel="noopener" style="color:#e1306c;font-size:1.6rem;" title="Instagram"><i class="fa-brands fa-instagram"></i></a>` : '',
+    d.social_whatsapp  ? `<a href="https://wa.me/${d.social_whatsapp.replace(/\D/g,'')}" target="_blank" rel="noopener" style="color:#25d366;font-size:1.6rem;" title="WhatsApp"><i class="fa-brands fa-whatsapp"></i></a>` : '',
+    d.social_website   ? `<a href="${d.social_website}"   target="_blank" rel="noopener" style="color:var(--primary);font-size:1.6rem;" title="Sitio web"><i class="fa-solid fa-globe"></i></a>` : '',
+  ].filter(Boolean).join('');
+  return `
+    <div class="dashboard">
+      <button class="btn btn-secondary" style="margin-bottom:1rem;" onclick="navigate('${backView}')"><i class="fa-solid fa-arrow-left"></i> Volver</button>
+      <div style="background:white;border-radius:15px;box-shadow:var(--card-shadow);overflow:hidden;">
+        <div style="background:linear-gradient(135deg,var(--primary),var(--secondary));padding:2rem;text-align:center;">
+          <div style="width:160px;height:160px;border-radius:50%;background:white;margin:0 auto;overflow:hidden;border:4px solid white;display:flex;align-items:center;justify-content:center;">
+            ${d.photo ? `<img src="${d.photo}" style="width:100%;height:100%;object-fit:cover;">` : `<i class="fa-solid fa-user-doctor" style="font-size:5rem;color:var(--primary);"></i>`}
+          </div>
+          <h1 style="color:white;margin-top:1rem;font-size:2rem;">${d.name}</h1>
+          ${d.specialty ? `<p style="color:rgba(255,255,255,0.95);font-size:1.05rem;">${d.specialty}</p>` : ''}
+          ${d.license ? `<p style="color:rgba(255,255,255,0.85);font-size:0.85rem;margin-top:0.25rem;">Cédula profesional: ${d.license}</p>` : ''}
+        </div>
+        <div style="padding:2rem;">
+          ${d.description ? `<div style="margin-bottom:1.5rem;"><h3 style="color:var(--primary);margin-bottom:0.5rem;">Acerca de</h3><p style="line-height:1.6;color:var(--text-dark);">${d.description.replace(/\n/g,'<br>')}</p></div>` : ''}
+
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1rem;margin-bottom:1.5rem;">
+            ${d.email          ? `<div style="background:var(--bg-color);padding:0.85rem 1rem;border-radius:10px;"><div style="font-size:0.72rem;color:var(--text-light);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:0.2rem;"><i class="fa-solid fa-envelope"></i> Correo</div><div style="font-weight:500;word-break:break-all;">${d.email}</div></div>` : ''}
+            ${d.phone          ? `<div style="background:var(--bg-color);padding:0.85rem 1rem;border-radius:10px;"><div style="font-size:0.72rem;color:var(--text-light);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:0.2rem;"><i class="fa-solid fa-phone"></i> Teléfono</div><div style="font-weight:500;">${d.phone}</div></div>` : ''}
+            ${d.office_address ? `<div style="background:var(--bg-color);padding:0.85rem 1rem;border-radius:10px;grid-column:1/-1;"><div style="font-size:0.72rem;color:var(--text-light);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:0.2rem;"><i class="fa-solid fa-location-dot"></i> Consultorio</div><div style="font-weight:500;">${d.office_address}</div></div>` : ''}
+          </div>
+
+          ${social ? `<div style="text-align:center;border-top:1px solid var(--bg-color);padding-top:1rem;"><div style="font-size:0.85rem;color:var(--text-light);margin-bottom:0.5rem;">Conecta conmigo</div><div style="display:flex;justify-content:center;gap:1.25rem;">${social}</div></div>` : ''}
+        </div>
+      </div>
+    </div>`;
 }
 
 function renderAvailabilitySettings() {
