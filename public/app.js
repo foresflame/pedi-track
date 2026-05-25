@@ -96,32 +96,50 @@ async function refreshData() {
 // === Main Render ===
 function renderApp() {
   const app = document.getElementById('app');
-  const headerAction = currentUser
-    ? `<button class="btn btn-secondary" onclick="handleLogout()"><i class="fa-solid fa-arrow-right-from-bracket"></i> Salir</button>`
-    : '';
 
-  let html = `
-    <header>
-      <div class="logo cursor-pointer" onclick="${currentUser ? "navigate(getRoleDefaultView(currentUser.role))" : "navigate('login')"}">
-        <i class="fa-solid fa-baby-carriage"></i> PediTrack
+  // Roles con shell de aplicación (sidebar + topbar)
+  const useShell = currentUser
+    && (currentUser.role === 'pediatra' || currentUser.role === 'admin')
+    && currentView !== 'login'
+    && currentView !== 'onboarding-success';
+
+  let viewHtml = '';
+  if      (currentView === 'login')               viewHtml = renderLogin();
+  else if (currentView === 'admin-dashboard')     viewHtml = renderAdminDashboard();
+  else if (currentView === 'doctor-dashboard')    viewHtml = renderDoctorDashboard();
+  else if (currentView === 'parent-profile')      viewHtml = renderParentProfile();
+  else if (currentView === 'patient-onboarding')  viewHtml = renderOnboarding();
+  else if (currentView === 'onboarding-success')  viewHtml = renderOnboardingSuccess();
+  else if (currentView === 'availability-settings') viewHtml = renderAvailabilitySettings();
+  else if (currentView === 'booking-calendar')    viewHtml = renderBookingCalendar();
+  else if (currentView === 'doctor-profile-edit') viewHtml = renderDoctorProfileEdit();
+  else if (currentView === 'doctor-public')       viewHtml = renderDoctorPublic();
+
+  let html;
+  if (useShell) {
+    html = `
+      ${renderSidebar()}
+      <div class="app-main">
+        ${renderTopbar()}
+        <main class="app-content animate-fade-in" id="main-content">
+          ${viewHtml}
+        </main>
       </div>
-      ${headerAction}
-    </header>
-    <main class="container animate-fade-in" id="main-content">
-  `;
-
-  if      (currentView === 'login')               html += renderLogin();
-  else if (currentView === 'admin-dashboard')     html += renderAdminDashboard();
-  else if (currentView === 'doctor-dashboard')    html += renderDoctorDashboard();
-  else if (currentView === 'parent-profile')      html += renderParentProfile();
-  else if (currentView === 'patient-onboarding')  html += renderOnboarding();
-  else if (currentView === 'onboarding-success')  html += renderOnboardingSuccess();
-  else if (currentView === 'availability-settings') html += renderAvailabilitySettings();
-  else if (currentView === 'booking-calendar')    html += renderBookingCalendar();
-  else if (currentView === 'doctor-profile-edit') html += renderDoctorProfileEdit();
-  else if (currentView === 'doctor-public')       html += renderDoctorPublic();
-
-  html += `</main>` + renderModals();
+    ` + renderModals();
+  } else {
+    const headerAction = currentUser
+      ? `<button class="btn btn-secondary" onclick="handleLogout()"><i class="fa-solid fa-arrow-right-from-bracket"></i> Salir</button>`
+      : '';
+    html = `
+      <header>
+        <div class="logo cursor-pointer" onclick="${currentUser ? "navigate(getRoleDefaultView(currentUser.role))" : "navigate('login')"}">
+          <i class="fa-solid fa-baby-carriage"></i> PediTrack
+        </div>
+        ${headerAction}
+      </header>
+      <main class="container animate-fade-in" id="main-content">${viewHtml}</main>
+    ` + renderModals();
+  }
   app.innerHTML = html;
 
   if (currentView === 'parent-profile')       initChart();
@@ -288,6 +306,72 @@ function renderAdminDashboard() {
   `;
 }
 
+// === Sidebar + Topbar shell (pediatra/admin) ===
+function renderSidebar() {
+  const role = currentUser.role;
+  const items = role === 'admin' ? [
+    { id: 'admin-dashboard',  icon: 'fa-house',          label: 'Inicio' },
+    { id: 'admin-dashboard',  icon: 'fa-user-group',     label: 'Pacientes' },
+  ] : [
+    { id: 'doctor-dashboard',     icon: 'fa-house',         label: 'Inicio' },
+    { id: 'doctor-dashboard',     icon: 'fa-user-group',    label: 'Pacientes' },
+    { id: 'availability-settings',icon: 'fa-calendar',      label: 'Calendario' },
+    { id: 'doctor-profile-edit',  icon: 'fa-id-card',       label: 'Mi Perfil' },
+  ];
+  const initials = (currentUser.name || '').split(' ').map(w => w[0]).slice(0,2).join('').toUpperCase();
+  return `
+    <aside class="sidebar">
+      <div class="sidebar-brand">
+        <div class="sidebar-brand-icon"><i class="fa-solid fa-baby-carriage"></i></div>
+        <div>
+          <div class="sidebar-brand-title">PediTrack</div>
+          <div class="sidebar-brand-subtitle">Historia clínica visual</div>
+        </div>
+      </div>
+      <nav class="sidebar-nav">
+        ${items.map(it => `
+          <a href="#" class="sidebar-link ${currentView === it.id ? 'is-active' : ''}" onclick="event.preventDefault();navigate('${it.id}')">
+            <i class="fa-solid ${it.icon}"></i> <span>${it.label}</span>
+          </a>`).join('')}
+      </nav>
+      <div class="sidebar-bottom">
+        <div class="sidebar-user">
+          <div class="sidebar-user-avatar">${initials || 'U'}</div>
+          <div style="overflow:hidden;">
+            <div class="sidebar-user-name">${currentUser.name}</div>
+            <div class="sidebar-user-role">${role === 'admin' ? 'Administrador' : 'Pediatra'}</div>
+          </div>
+        </div>
+        <a href="#" class="sidebar-logout" onclick="event.preventDefault();handleLogout()">
+          <i class="fa-solid fa-arrow-right-from-bracket"></i> Cerrar sesión
+        </a>
+      </div>
+    </aside>`;
+}
+
+function renderTopbar() {
+  const role = currentUser.role;
+  return `
+    <header class="topbar">
+      <div class="topbar-search">
+        <i class="fa-solid fa-magnifying-glass"></i>
+        <input type="text" id="topbarSearch" placeholder="Buscar paciente por nombre..." oninput="topbarFilterPatients(this.value)">
+      </div>
+      <div class="topbar-actions">
+        ${role === 'pediatra' ? `
+          <button class="topbar-quick" onclick="navigate('availability-settings')"><i class="fa-regular fa-calendar"></i> Agendar cita</button>
+        ` : ''}
+        <button class="topbar-primary" onclick="navigate('patient-onboarding')"><i class="fa-solid fa-plus"></i> Nuevo paciente</button>
+      </div>
+    </header>`;
+}
+
+window.topbarFilterPatients = function(q) {
+  patientSearchQuery = q || '';
+  // Re-render solo si estamos en un dashboard con lista
+  if (currentView === 'doctor-dashboard' || currentView === 'admin-dashboard') renderApp();
+};
+
 function renderDoctorDashboard() {
   const q = patientSearchQuery.toLowerCase();
   const visiblePatients = q ? patients.filter(p => p.name.toLowerCase().includes(q)) : patients;
@@ -398,25 +482,134 @@ function renderDoctorDashboard() {
         <p style="color:var(--text-light);">${q ? 'Prueba otro término.' : 'Agrega tu primer paciente.'}</p>
       </div>`;
 
+  // Estadísticas
+  const totalPatients = patients.length;
+  const withPending = Object.keys(pendingByPatient).length;
+  const overdue = patients.filter(p => p.next_visit_date && new Date(p.next_visit_date) < new Date(today)).length;
+  const consultsThisMonth = (() => {
+    const first = new Date(); first.setDate(1); const cutoff = first.toISOString().slice(0,10);
+    // No tenemos endpoint para consultas globales; usamos placeholder de citas confirmadas+completadas del mes
+    return doctorAppointments.filter(a => a.date >= cutoff && (a.status === 'completada' || a.status === 'confirmada')).length;
+  })();
+
+  // Tabla de pacientes
+  const tableRows = visiblePatients.length > 0
+    ? visiblePatients.map(p => {
+        const age = calculateAgeString(p.birth_date || (p.onboarding_data && p.onboarding_data['Fecha de nacimiento']));
+        const allergies = (p.onboarding_data && p.onboarding_data['known-allergies'] || '').trim();
+        const hasAllergies = allergies && !/^(ninguna|ninguno|no|n\/a|na|sin alergias?)$/i.test(allergies);
+        const chronic   = (p.onboarding_data && p.onboarding_data['chronic-meds'] || '').trim();
+        const hasChronic = chronic && !/^(ninguna|ninguno|no|n\/a|na)$/i.test(chronic);
+        const pending = pendingByPatient[p.id];
+        const nvLabel = (() => {
+          if (!p.next_visit_date) return '—';
+          const dLeft = Math.round((new Date(p.next_visit_date) - new Date(today)) / 86_400_000);
+          const dt = new Date(p.next_visit_date + 'T12:00:00').toLocaleDateString('es-MX', { day:'2-digit', month:'2-digit', year:'numeric' });
+          if (dLeft < 0) return `<span style="color:#ef4444;">${dt}</span><br><span style="font-size:0.7rem;color:#ef4444;">Vencida</span>`;
+          if (dLeft <= 7) return `<span>${dt}</span><br><span style="font-size:0.7rem;color:#f59e0b;">En ${dLeft}d</span>`;
+          return `<span>${dt}</span>`;
+        })();
+        const sex = p.sex || (p.onboarding_data && p.onboarding_data['Sexo']) || '';
+        const sexIcon = /^f/i.test(sex) ? `<i class="fa-solid fa-venus" style="color:#ec4899;"></i>` : /^m/i.test(sex) ? `<i class="fa-solid fa-mars" style="color:#3b82f6;"></i>` : '';
+        const alerts = [];
+        if (hasAllergies) alerts.push(`<span class="alert-pill alert-allergy" title="${allergies.replace(/"/g,'&quot;')}"><i class="fa-solid fa-triangle-exclamation"></i> Alergias</span>`);
+        if (hasChronic)   alerts.push(`<span class="alert-pill alert-chronic" title="${chronic.replace(/"/g,'&quot;')}"><i class="fa-solid fa-pills"></i> Crónico</span>`);
+        if (pending)      alerts.push(`<span class="alert-pill alert-pending" title="Cita solicitada"><i class="fa-solid fa-bell"></i> Cita solicitada</span>`);
+
+        return `
+          <tr class="pt-row" onclick="viewPatient(${p.id})">
+            <td>
+              <div style="display:flex;align-items:center;gap:0.6rem;">
+                <div class="pt-avatar">${p.name.charAt(0).toUpperCase()}</div>
+                <div>
+                  <div style="font-weight:600;color:var(--text-dark);">${p.name}</div>
+                  <div style="font-size:0.75rem;color:var(--text-light);">#${String(p.id).padStart(6,'0')}</div>
+                </div>
+              </div>
+            </td>
+            <td>
+              <div style="font-weight:500;">${age}</div>
+              <div style="font-size:0.78rem;color:var(--text-light);">${sexIcon} ${sex || '—'}</div>
+            </td>
+            <td>
+              <div style="font-size:0.82rem;">
+                ${p.tutor_name ? `<div style="font-weight:500;">${p.tutor_name}</div>` : ''}
+                ${p.tutor_email ? `<div style="color:var(--text-light);font-size:0.78rem;">${p.tutor_email}</div>` : '<span style="color:var(--text-light);font-style:italic;">Sin tutor</span>'}
+              </div>
+            </td>
+            <td>${alerts.length ? `<div style="display:flex;flex-direction:column;gap:0.25rem;align-items:flex-start;">${alerts.join('')}</div>` : '<span style="color:var(--text-light);">—</span>'}</td>
+            <td style="text-align:center;font-weight:600;color:var(--primary);">${p.weight ? p.weight + ' kg' : '—'}</td>
+            <td style="text-align:center;font-weight:600;">${p.height ? p.height + ' cm' : '—'}</td>
+            <td style="font-size:0.82rem;line-height:1.3;">${nvLabel}</td>
+            <td style="text-align:right;">
+              <button class="pt-action" onclick="event.stopPropagation();viewPatient(${p.id})" title="Ver expediente"><i class="fa-solid fa-eye"></i></button>
+              ${p.tutor_id ? `<button class="pt-action" onclick="event.stopPropagation();openResetPasswordModal(${p.tutor_id})" title="Clave del tutor"><i class="fa-solid fa-key"></i></button>` : ''}
+            </td>
+          </tr>`;
+      }).join('')
+    : `<tr><td colspan="8" style="text-align:center;padding:3rem;color:var(--text-light);">
+        <i class="fa-solid fa-folder-open" style="font-size:2.5rem;color:var(--primary-light);display:block;margin-bottom:0.75rem;"></i>
+        <strong>${q ? 'Sin resultados' : 'Aún no tienes pacientes'}</strong><br>
+        <small>${q ? 'Prueba otro término.' : 'Agrega tu primer paciente con el botón "Nuevo paciente".'}</small>
+      </td></tr>`;
+
   return `
-    <div class="dashboard">
-      <div class="dashboard-header">
+    <div class="dashboard-v2">
+      <div class="hero-banner">
         <div>
-          <h1 style="font-size:2rem;">Mis Pacientes</h1>
-          <p style="color:var(--text-light);">${patients.length > 0 ? `${patients.length} paciente(s) registrado(s).` : 'Bienvenido a tu panel.'}</p>
+          <h1 style="font-size:1.75rem;margin-bottom:0.4rem;">Pacientes</h1>
+          <p style="color:var(--text-light);">Gestiona y da seguimiento a tus pacientes</p>
         </div>
-        <div style="display:flex;gap:1rem;flex-wrap:wrap;align-items:center;">
-          <button class="btn btn-secondary" onclick="navigate('doctor-profile-edit')"><i class="fa-solid fa-id-card"></i> Mi Perfil</button>
-          <button class="btn btn-secondary" onclick="navigate('availability-settings')"><i class="fa-regular fa-calendar"></i> Disponibilidad</button>
-          <button class="btn btn-primary" onclick="navigate('patient-onboarding')"><i class="fa-solid fa-plus"></i> Nuevo Paciente</button>
+        <div class="hero-illustration"><i class="fa-solid fa-stethoscope"></i></div>
+      </div>
+
+      <div class="stats-row">
+        <div class="stat-pill">
+          <div class="stat-pill-icon" style="background:#dbeafe;color:#2563eb;"><i class="fa-solid fa-users"></i></div>
+          <div><div class="stat-pill-value">${totalPatients}</div><div class="stat-pill-label">Total pacientes</div><div class="stat-pill-sub">Registrados</div></div>
+        </div>
+        <div class="stat-pill">
+          <div class="stat-pill-icon" style="background:#d1fae5;color:#059669;"><i class="fa-solid fa-notes-medical"></i></div>
+          <div><div class="stat-pill-value">${consultsThisMonth}</div><div class="stat-pill-label">Citas este mes</div><div class="stat-pill-sub">Confirmadas y completadas</div></div>
+        </div>
+        <div class="stat-pill">
+          <div class="stat-pill-icon" style="background:#fef3c7;color:#d97706;"><i class="fa-solid fa-bell"></i></div>
+          <div><div class="stat-pill-value">${withPending}</div><div class="stat-pill-label">Citas solicitadas</div><div class="stat-pill-sub">Por confirmar</div></div>
+        </div>
+        <div class="stat-pill">
+          <div class="stat-pill-icon" style="background:#fee2e2;color:#dc2626;"><i class="fa-solid fa-triangle-exclamation"></i></div>
+          <div><div class="stat-pill-value">${overdue}</div><div class="stat-pill-label">Visitas vencidas</div><div class="stat-pill-sub">Requieren atención</div></div>
         </div>
       </div>
+
       ${apptSection}
       ${upcomingSection}
-      <div style="margin-bottom:1.5rem;">
-        <input type="text" class="form-control" placeholder="🔍 Buscar paciente por nombre..." value="${patientSearchQuery}" oninput="filterPatients(this.value)" style="max-width:400px;">
+
+      <div class="table-card">
+        <div class="table-toolbar">
+          <div class="filter-pills">
+            <button class="pill is-active">Todos</button>
+            <button class="pill" onclick="topbarFilterPatients('');alert('Filtros adicionales próximamente.')">Con alergias</button>
+            <button class="pill" onclick="topbarFilterPatients('');alert('Filtros adicionales próximamente.')">Visita vencida</button>
+          </div>
+          <div style="color:var(--text-light);font-size:0.85rem;">${visiblePatients.length} de ${totalPatients} pacientes</div>
+        </div>
+        <div style="overflow-x:auto;">
+          <table class="patients-table">
+            <thead><tr>
+              <th>Paciente</th>
+              <th>Edad / Sexo</th>
+              <th>Tutor / Contacto</th>
+              <th>Alertas clínicas</th>
+              <th style="text-align:center;">Peso</th>
+              <th style="text-align:center;">Talla</th>
+              <th>Próxima visita</th>
+              <th style="text-align:right;">Acciones</th>
+            </tr></thead>
+            <tbody>${tableRows}</tbody>
+          </table>
+        </div>
       </div>
-      <div class="patients-grid">${patientsHtml}</div>
     </div>
   `;
 }
