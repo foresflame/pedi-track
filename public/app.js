@@ -551,7 +551,7 @@ function renderParentProfile() {
           <h1 style="font-size:2.5rem;margin-bottom:0.5rem;">${p.name}</h1>
           <p style="font-size:1.2rem;opacity:0.9;">
             ${calculateAgeString(birthDate)} •
-            ${p.doctor_id ? `<a href="#" onclick="event.preventDefault();event.stopPropagation();viewDoctorProfile(${p.doctor_id})" style="color:white;text-decoration:underline;cursor:pointer;">${doctorName}</a>` : doctorName}
+            ${p.doctor_id && currentUser.role === 'tutor' ? `<a href="#" onclick="event.preventDefault();event.stopPropagation();viewDoctorProfile(${p.doctor_id})" style="color:white;text-decoration:underline;cursor:pointer;">${doctorName}</a>` : doctorName}
           </p>
         </div>
         <div style="margin-left:auto;display:flex;gap:0.8rem;flex-wrap:wrap;z-index:2;">
