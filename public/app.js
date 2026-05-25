@@ -175,6 +175,9 @@ function renderAdminDashboard() {
           <h1 style="font-size:2rem;">Panel de Administrador</h1>
           <p style="color:var(--text-light);">Bienvenido, ${currentUser.name}</p>
         </div>
+        <div style="display:flex;gap:0.75rem;flex-wrap:wrap;">
+          <button class="btn btn-primary" onclick="navigate('patient-onboarding')"><i class="fa-solid fa-user-plus"></i> Nuevo Paciente</button>
+        </div>
       </div>
       <div class="profile-stats">
         <div class="stat-card"><div class="stat-label">Total Pacientes</div><div class="stat-value">${patients.length}</div><p style="color:var(--secondary);font-size:0.9rem;"><i class="fa-solid fa-arrow-trend-up"></i> Sistema activo</p></div>
@@ -1094,7 +1097,7 @@ function renderOnboardingSuccess() {
               <div style="font-weight:600;font-size:1.3rem;letter-spacing:2px;background:white;padding:0.5rem;border-radius:6px;display:inline-block;border:1px dashed var(--text-light);">${password}</div>
             </div>` : ''}` : `<p style="color:var(--text-light);font-style:italic;">No se generó cuenta de tutor.</p>`}
           </div>
-          <button class="btn btn-primary" style="width:100%;font-size:1.1rem;padding:1rem;" onclick="navigate('doctor-dashboard')">Ir a mi Panel</button>
+          <button class="btn btn-primary" style="width:100%;font-size:1.1rem;padding:1rem;" onclick="navigate(getRoleDefaultView(currentUser.role))">Ir a mi Panel</button>
         </div>
         <div style="text-align:center;border-left:1px solid var(--bg-color);padding-left:3rem;">
           <h3 style="margin-bottom:1rem;">Acceso Rápido</h3>
@@ -2024,10 +2027,21 @@ function renderModals() {
 
     <!-- Reset Password Modal -->
     <div class="modal-overlay" id="resetPasswordModal" onclick="if(event.target===this)closeModal('resetPasswordModal')">
-      <div class="modal-content" style="max-width:400px;">
+      <div class="modal-content" style="max-width:440px;">
         <div class="modal-header"><h2>Cambiar Contraseña del Tutor</h2><button class="close-btn" onclick="closeModal('resetPasswordModal')"><i class="fa-solid fa-xmark"></i></button></div>
-        <div class="form-group"><label>Nueva Contraseña</label><input type="text" id="resetPasswordInput" class="form-control" placeholder="Mín. 6 caracteres"></div>
-        <button class="btn btn-primary" style="width:100%;margin-top:1rem;" onclick="confirmResetPassword()">Actualizar Contraseña</button>
+        <p style="color:var(--text-light);font-size:0.85rem;margin-bottom:1rem;">Se generó una contraseña aleatoria de 8 caracteres. Compártela con el tutor.</p>
+        <div class="form-group">
+          <label>Nueva Contraseña</label>
+          <div style="display:flex;gap:0.5rem;align-items:stretch;">
+            <input type="text" id="resetPasswordInput" class="form-control" style="font-family:monospace;font-size:1.15rem;letter-spacing:0.05em;font-weight:600;text-align:center;background:#f1f5f9;" readonly>
+            <button class="btn btn-secondary" style="padding:0.5rem 0.85rem;flex-shrink:0;" onclick="regenerateResetPassword()" title="Generar otra"><i class="fa-solid fa-arrows-rotate"></i></button>
+            <button class="btn btn-secondary" style="padding:0.5rem 0.85rem;flex-shrink:0;" onclick="copyResetPassword()" title="Copiar"><i class="fa-solid fa-copy"></i></button>
+          </div>
+          <label style="display:flex;align-items:center;gap:0.4rem;margin-top:0.75rem;font-size:0.85rem;cursor:pointer;font-weight:400;">
+            <input type="checkbox" id="resetPasswordCustom" onchange="toggleCustomPassword()"> Escribir contraseña manualmente
+          </label>
+        </div>
+        <button class="btn btn-primary" style="width:100%;margin-top:1rem;" onclick="confirmResetPassword()"><i class="fa-solid fa-key"></i> Actualizar Contraseña</button>
       </div>
     </div>
 
@@ -3323,10 +3337,67 @@ window.deletePatient = async function(id) {
 // === Password reset ===
 window.resetPasswordTutorId = null;
 
+window.generateRandomPassword = function(length = 8) {
+  // Excluye caracteres confundibles (0/O, 1/l/I) y símbolos para evitar problemas de tipeo
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+  const arr = new Uint32Array(length);
+  crypto.getRandomValues(arr);
+  let s = '';
+  for (let i = 0; i < length; i++) s += chars[arr[i] % chars.length];
+  return s;
+};
+
 window.openResetPasswordModal = function(tutorId) {
   window.resetPasswordTutorId = tutorId;
-  const inp = document.getElementById('resetPasswordInput'); if(inp) inp.value='';
+  const inp = document.getElementById('resetPasswordInput');
+  const cb  = document.getElementById('resetPasswordCustom');
+  if (cb) cb.checked = false;
+  if (inp) {
+    inp.value = generateRandomPassword(8);
+    inp.readOnly = true;
+    inp.style.background = '#f1f5f9';
+  }
   openModal('resetPasswordModal');
+};
+
+window.regenerateResetPassword = function() {
+  const inp = document.getElementById('resetPasswordInput');
+  if (inp && !inp.readOnly) {
+    document.getElementById('resetPasswordCustom').checked = false;
+    toggleCustomPassword();
+  }
+  if (inp) inp.value = generateRandomPassword(8);
+};
+
+window.copyResetPassword = async function() {
+  const inp = document.getElementById('resetPasswordInput');
+  if (!inp || !inp.value) return;
+  try {
+    await navigator.clipboard.writeText(inp.value);
+    const btn = event.currentTarget;
+    const old = btn.innerHTML;
+    btn.innerHTML = '<i class="fa-solid fa-check"></i>';
+    setTimeout(() => { btn.innerHTML = old; }, 1200);
+  } catch(e) {
+    inp.select();
+    document.execCommand('copy');
+  }
+};
+
+window.toggleCustomPassword = function() {
+  const cb  = document.getElementById('resetPasswordCustom');
+  const inp = document.getElementById('resetPasswordInput');
+  if (!cb || !inp) return;
+  if (cb.checked) {
+    inp.readOnly = false;
+    inp.style.background = 'white';
+    inp.value = '';
+    inp.focus();
+  } else {
+    inp.readOnly = true;
+    inp.style.background = '#f1f5f9';
+    inp.value = generateRandomPassword(8);
+  }
 };
 
 window.confirmResetPassword = async function() {
@@ -3334,7 +3405,7 @@ window.confirmResetPassword = async function() {
   if (!newPass || newPass.length < 6) { alert('Mínimo 6 caracteres.'); return; }
   try {
     await API.post(`/auth/reset-password/${window.resetPasswordTutorId}`, { newPassword: newPass });
-    alert('Contraseña actualizada correctamente.');
+    alert(`Contraseña actualizada correctamente.\n\nNueva contraseña: ${newPass}\n\nCompártela con el tutor antes de cerrar este mensaje.`);
     closeModal('resetPasswordModal');
   } catch (e) { alert('Error: '+e.message); }
 };
