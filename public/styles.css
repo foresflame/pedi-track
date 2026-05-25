@@ -1149,6 +1149,90 @@ header {
     border-color: var(--primary);
 }
 
+/* Home (Inicio) appointment lists */
+.home-appt-list {
+    display: flex;
+    flex-direction: column;
+}
+.home-appt-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.85rem 1.1rem;
+    border-bottom: 1px solid #f1f5f9;
+    cursor: pointer;
+    transition: background 0.12s;
+}
+.home-appt-row:last-child { border-bottom: none; }
+.home-appt-row:hover { background: #f8fafc; }
+
+.home-appt-time {
+    font-weight: 700;
+    font-size: 0.92rem;
+    color: var(--primary);
+    background: #dbeafe;
+    padding: 0.35rem 0.6rem;
+    border-radius: 8px;
+    min-width: 58px;
+    text-align: center;
+    flex-shrink: 0;
+}
+.home-appt-avatar {
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--primary-light), #dbeafe);
+    color: var(--primary);
+    font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.9rem;
+    flex-shrink: 0;
+}
+.home-appt-badge {
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 0.22rem 0.6rem;
+    border-radius: 12px;
+    white-space: nowrap;
+}
+
+.home-btn {
+    padding: 0.35rem 0.7rem;
+    border-radius: 7px;
+    border: none;
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.12s;
+    white-space: nowrap;
+}
+.home-btn:hover { transform: translateY(-1px); }
+.home-btn-primary { background: var(--primary); color: white; }
+.home-btn-success { background: #10b981; color: white; }
+.home-btn-danger {
+    background: white;
+    color: #ef4444;
+    border: 1px solid #fca5a5;
+}
+.home-btn-danger:hover { background: #fef2f2; }
+
+.home-empty {
+    padding: 2rem 1.5rem;
+    text-align: center;
+    color: var(--text-light);
+}
+.home-empty i {
+    font-size: 2.5rem;
+    color: var(--primary-light);
+    display: block;
+}
+
+@media (max-width: 1024px) {
+    /* En layouts más angostos los dos paneles van uno debajo del otro */
+    .dashboard-v2 > div[style*="grid-template-columns:1.4fr 1fr"] {
+        grid-template-columns: 1fr !important;
+    }
+}
+
 /* Alert pills (in table) */
 .alert-pill {
     display: inline-flex;

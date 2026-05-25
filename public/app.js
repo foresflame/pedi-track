@@ -48,7 +48,7 @@ let dcDaySlots = [];
 
 function getRoleDefaultView(role) {
   if (role === 'admin')    return 'admin-dashboard';
-  if (role === 'pediatra') return 'doctor-dashboard';
+  if (role === 'pediatra') return 'doctor-home';
   if (role === 'tutor')    return 'parent-profile';
   return 'login';
 }
@@ -106,6 +106,7 @@ function renderApp() {
   let viewHtml = '';
   if      (currentView === 'login')               viewHtml = renderLogin();
   else if (currentView === 'admin-dashboard')     viewHtml = renderAdminDashboard();
+  else if (currentView === 'doctor-home')         viewHtml = renderDoctorHome();
   else if (currentView === 'doctor-dashboard')    viewHtml = renderDoctorDashboard();
   else if (currentView === 'parent-profile')      viewHtml = renderParentProfile();
   else if (currentView === 'patient-onboarding')  viewHtml = renderOnboarding();
@@ -313,7 +314,7 @@ function renderSidebar() {
     { id: 'admin-dashboard',  icon: 'fa-house',          label: 'Inicio' },
     { id: 'admin-dashboard',  icon: 'fa-user-group',     label: 'Pacientes' },
   ] : [
-    { id: 'doctor-dashboard',     icon: 'fa-house',         label: 'Inicio' },
+    { id: 'doctor-home',          icon: 'fa-house',         label: 'Inicio' },
     { id: 'doctor-dashboard',     icon: 'fa-user-group',    label: 'Pacientes' },
     { id: 'availability-settings',icon: 'fa-calendar',      label: 'Calendario' },
     { id: 'doctor-profile-edit',  icon: 'fa-id-card',       label: 'Mi Perfil' },
@@ -371,6 +372,135 @@ window.topbarFilterPatients = function(q) {
   // Re-render solo si estamos en un dashboard con lista
   if (currentView === 'doctor-dashboard' || currentView === 'admin-dashboard') renderApp();
 };
+
+function renderDoctorHome() {
+  const today = new Date().toISOString().slice(0, 10);
+  const firstName = (currentUser.name || '').split(' ')[0] || 'Doctor';
+  const dateLabel = new Date().toLocaleDateString('es-MX', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
+
+  // Citas de hoy (excluye canceladas)
+  const todayList = (todayAppointments || []).filter(a => a.status !== 'cancelada')
+    .sort((a, b) => a.time.localeCompare(b.time));
+
+  // Solicitudes pendientes (todas las pendientes futuras, no solo de hoy)
+  const requests = (doctorAppointments || [])
+    .filter(a => a.status === 'pendiente' && a.date >= today)
+    .sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time));
+
+  const statusCfg = {
+    pendiente:  { bg:'#fef3c7', color:'#92400e', label:'Pendiente' },
+    confirmada: { bg:'#d1fae5', color:'#065f46', label:'Confirmada' },
+    completada: { bg:'#dbeafe', color:'#1e3a8a', label:'Completada' },
+  };
+
+  // Lista de citas de hoy
+  const todayHtml = todayList.length ? todayList.map(a => {
+    const cfg = statusCfg[a.status] || statusCfg.pendiente;
+    const initial = (a.patient_name || a.label || '?').charAt(0).toUpperCase();
+    return `
+      <div class="home-appt-row" ${a.patient_id ? `onclick="viewPatient(${a.patient_id})"` : ''}>
+        <div class="home-appt-time">${a.time}</div>
+        <div class="home-appt-avatar">${initial}</div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-weight:600;color:var(--text-dark);">${a.patient_name || `<em style="color:var(--text-light);">${a.label || 'Bloqueado'}</em>`}</div>
+          ${a.notes ? `<div style="font-size:0.78rem;color:var(--text-light);margin-top:0.15rem;">${a.notes}</div>` : ''}
+        </div>
+        <span class="home-appt-badge" style="background:${cfg.bg};color:${cfg.color};">${cfg.label}</span>
+        <div style="display:flex;gap:0.35rem;">
+          ${a.status === 'pendiente' && a.patient_id  ? `<button class="home-btn home-btn-primary" onclick="event.stopPropagation();updateAppointmentStatus(${a.id},'confirmada')">Confirmar</button>` : ''}
+          ${a.status === 'confirmada' ? `<button class="home-btn home-btn-success" onclick="event.stopPropagation();updateAppointmentStatus(${a.id},'completada')">Completar</button>` : ''}
+          ${a.status !== 'completada' && a.status !== 'cancelada' ? `<button class="home-btn home-btn-danger" onclick="event.stopPropagation();updateAppointmentStatus(${a.id},'cancelada')" title="Cancelar"><i class="fa-solid fa-xmark"></i></button>` : ''}
+        </div>
+      </div>`;
+  }).join('') : `
+    <div class="home-empty">
+      <i class="fa-regular fa-calendar-check"></i>
+      <div style="font-weight:600;margin-top:0.6rem;">Sin citas para hoy</div>
+      <div style="font-size:0.85rem;color:var(--text-light);">Disfruta tu día. Las nuevas solicitudes aparecerán aquí.</div>
+    </div>`;
+
+  // Lista de solicitudes pendientes
+  const requestsHtml = requests.length ? requests.map(a => {
+    const dt = new Date(a.date + 'T12:00:00');
+    const dateStr = dt.toLocaleDateString('es-MX', { weekday:'short', day:'numeric', month:'short' });
+    const isToday = a.date === today;
+    const initial = (a.patient_name || '?').charAt(0).toUpperCase();
+    return `
+      <div class="home-appt-row" ${a.patient_id ? `onclick="viewPatient(${a.patient_id})"` : ''}>
+        <div class="home-appt-time" style="background:#fef3c7;color:#92400e;">${a.time}</div>
+        <div class="home-appt-avatar" style="background:#fde68a;color:#92400e;">${initial}</div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-weight:600;color:var(--text-dark);">${a.patient_name || 'Paciente'}</div>
+          <div style="font-size:0.78rem;color:${isToday ? '#dc2626' : 'var(--text-light)'};margin-top:0.15rem;">
+            <i class="fa-regular fa-calendar"></i> ${dateStr}${isToday ? ' · <strong>Hoy</strong>' : ''}
+          </div>
+          ${a.notes ? `<div style="font-size:0.78rem;color:var(--text-light);font-style:italic;margin-top:0.15rem;">"${a.notes}"</div>` : ''}
+        </div>
+        <div style="display:flex;gap:0.35rem;">
+          <button class="home-btn home-btn-primary" onclick="event.stopPropagation();updateAppointmentStatus(${a.id},'confirmada')"><i class="fa-solid fa-check"></i> Aceptar</button>
+          <button class="home-btn home-btn-danger" onclick="event.stopPropagation();updateAppointmentStatus(${a.id},'cancelada')" title="Rechazar"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+      </div>`;
+  }).join('') : `
+    <div class="home-empty">
+      <i class="fa-regular fa-bell-slash"></i>
+      <div style="font-weight:600;margin-top:0.6rem;">No hay solicitudes pendientes</div>
+      <div style="font-size:0.85rem;color:var(--text-light);">Cuando un tutor solicite una cita, la verás aquí.</div>
+    </div>`;
+
+  // Stats rápidos
+  const confirmedToday = todayList.filter(a => a.status === 'confirmada').length;
+  const pendingToday   = todayList.filter(a => a.status === 'pendiente').length;
+  const completedToday = todayList.filter(a => a.status === 'completada').length;
+
+  return `
+    <div class="dashboard-v2">
+      <div class="hero-banner">
+        <div>
+          <h1 style="font-size:1.75rem;margin-bottom:0.4rem;">Hola, Dr. ${firstName} 👋</h1>
+          <p style="color:var(--text-light);text-transform:capitalize;">${dateLabel}</p>
+        </div>
+        <div class="hero-illustration"><i class="fa-solid fa-calendar-day"></i></div>
+      </div>
+
+      <div class="stats-row">
+        <div class="stat-pill">
+          <div class="stat-pill-icon" style="background:#dbeafe;color:#2563eb;"><i class="fa-solid fa-calendar-day"></i></div>
+          <div><div class="stat-pill-value">${todayList.length}</div><div class="stat-pill-label">Citas de hoy</div><div class="stat-pill-sub">Total agendadas</div></div>
+        </div>
+        <div class="stat-pill">
+          <div class="stat-pill-icon" style="background:#d1fae5;color:#059669;"><i class="fa-solid fa-circle-check"></i></div>
+          <div><div class="stat-pill-value">${confirmedToday}</div><div class="stat-pill-label">Confirmadas</div><div class="stat-pill-sub">Listas para atender</div></div>
+        </div>
+        <div class="stat-pill">
+          <div class="stat-pill-icon" style="background:#fef3c7;color:#d97706;"><i class="fa-solid fa-bell"></i></div>
+          <div><div class="stat-pill-value">${requests.length}</div><div class="stat-pill-label">Solicitudes</div><div class="stat-pill-sub">Por aceptar</div></div>
+        </div>
+        <div class="stat-pill">
+          <div class="stat-pill-icon" style="background:#ede9fe;color:#7c3aed;"><i class="fa-solid fa-flag-checkered"></i></div>
+          <div><div class="stat-pill-value">${completedToday}</div><div class="stat-pill-label">Completadas hoy</div><div class="stat-pill-sub">Consultas finalizadas</div></div>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1.4fr 1fr;gap:1.25rem;">
+        <div class="table-card">
+          <div class="table-toolbar">
+            <h2 style="font-size:1.1rem;display:flex;align-items:center;gap:0.5rem;"><i class="fa-regular fa-calendar-check" style="color:var(--primary);"></i> Citas de hoy</h2>
+            <span style="color:var(--text-light);font-size:0.85rem;">${todayList.length} cita${todayList.length === 1 ? '' : 's'}</span>
+          </div>
+          <div class="home-appt-list">${todayHtml}</div>
+        </div>
+
+        <div class="table-card">
+          <div class="table-toolbar">
+            <h2 style="font-size:1.1rem;display:flex;align-items:center;gap:0.5rem;"><i class="fa-solid fa-bell" style="color:#d97706;"></i> Solicitudes de cita</h2>
+            ${requests.length ? `<span class="alert-pill alert-pending">${requests.length}</span>` : ''}
+          </div>
+          <div class="home-appt-list">${requestsHtml}</div>
+        </div>
+      </div>
+    </div>`;
+}
 
 function renderDoctorDashboard() {
   const q = patientSearchQuery.toLowerCase();
