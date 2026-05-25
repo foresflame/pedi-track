@@ -1233,6 +1233,53 @@ header {
     }
 }
 
+/* Toggle activo/inactivo en tabla */
+.pt-toggle {
+    position: relative;
+    display: inline-block;
+    width: 42px;
+    height: 22px;
+    cursor: pointer;
+}
+.pt-toggle input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+.pt-toggle-slider {
+    position: absolute;
+    inset: 0;
+    background: #cbd5e1;
+    border-radius: 11px;
+    transition: 0.25s;
+}
+.pt-toggle-slider::before {
+    content: '';
+    position: absolute;
+    width: 16px;
+    height: 16px;
+    left: 3px;
+    bottom: 3px;
+    background: white;
+    border-radius: 50%;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+    transition: 0.25s;
+}
+.pt-toggle input:checked + .pt-toggle-slider {
+    background: linear-gradient(135deg, var(--primary), var(--secondary));
+}
+.pt-toggle input:checked + .pt-toggle-slider::before {
+    transform: translateX(20px);
+}
+
+/* Fila inactiva */
+.pt-row.is-inactive td {
+    opacity: 0.55;
+}
+.pt-row.is-inactive td:nth-last-child(2) {
+    opacity: 1; /* Mantener el toggle visible */
+}
+
 /* Alert pills (in table) */
 .alert-pill {
     display: inline-flex;

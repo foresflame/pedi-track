@@ -246,6 +246,19 @@ router.put('/:id/assign', requireRole('admin'), (req, res) => {
   res.json(parsePatient(db.prepare(`${WITH_DOCTOR} WHERE p.id = ?`).get(id)));
 });
 
+// PUT /api/patients/:id/active — alternar estado activo (pediatra/admin)
+router.put('/:id/active', requireRole('admin', 'pediatra'), (req, res) => {
+  const id = parseInt(req.params.id);
+  const { active } = req.body;
+  const p = db.prepare('SELECT id, doctor_id FROM patients WHERE id = ?').get(id);
+  if (!p) return res.status(404).json({ error: 'Paciente no encontrado' });
+  if (req.user.role === 'pediatra' && p.doctor_id !== req.user.id) {
+    return res.status(403).json({ error: 'No puedes modificar este paciente' });
+  }
+  db.prepare('UPDATE patients SET active = ? WHERE id = ?').run(active ? 1 : 0, id);
+  res.json({ id, active: active ? 1 : 0 });
+});
+
 // DELETE /api/patients/:id — eliminar paciente (admin)
 router.delete('/:id', requireRole('admin'), (req, res) => {
   const id = parseInt(req.params.id);

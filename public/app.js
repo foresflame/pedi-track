@@ -367,6 +367,15 @@ function renderTopbar() {
     </header>`;
 }
 
+window.togglePatientActive = async function(patientId, active) {
+  try {
+    await API.put(`/patients/${patientId}/active`, { active });
+    const p = patients.find(x => x.id === patientId);
+    if (p) p.active = active ? 1 : 0;
+    renderApp();
+  } catch(e) { alert('Error: ' + e.message); }
+};
+
 window.topbarFilterPatients = function(q) {
   patientSearchQuery = q || '';
   // Re-render solo si estamos en un dashboard con lista
@@ -646,8 +655,9 @@ function renderDoctorDashboard() {
         if (hasChronic)   alerts.push(`<span class="alert-pill alert-chronic" title="${chronic.replace(/"/g,'&quot;')}"><i class="fa-solid fa-pills"></i> Crónico</span>`);
         if (pending)      alerts.push(`<span class="alert-pill alert-pending" title="Cita solicitada"><i class="fa-solid fa-bell"></i> Cita solicitada</span>`);
 
+        const isActive = p.active !== 0; // null o 1 = activo (compat. con pacientes viejos)
         return `
-          <tr class="pt-row" onclick="viewPatient(${p.id})">
+          <tr class="pt-row ${isActive ? '' : 'is-inactive'}" onclick="viewPatient(${p.id})">
             <td>
               <div style="display:flex;align-items:center;gap:0.6rem;">
                 <div class="pt-avatar">${p.name.charAt(0).toUpperCase()}</div>
@@ -671,13 +681,20 @@ function renderDoctorDashboard() {
             <td style="text-align:center;font-weight:600;color:var(--primary);">${p.weight ? p.weight + ' kg' : '—'}</td>
             <td style="text-align:center;font-weight:600;">${p.height ? p.height + ' cm' : '—'}</td>
             <td style="font-size:0.82rem;line-height:1.3;">${nvLabel}</td>
+            <td style="text-align:center;">
+              <label class="pt-toggle" onclick="event.stopPropagation();" title="${isActive ? 'Activo' : 'Inactivo'}">
+                <input type="checkbox" ${isActive ? 'checked' : ''} onchange="togglePatientActive(${p.id}, this.checked)">
+                <span class="pt-toggle-slider"></span>
+              </label>
+              <div style="font-size:0.7rem;color:${isActive ? '#059669' : 'var(--text-light)'};font-weight:600;margin-top:0.2rem;">${isActive ? 'Activo' : 'Inactivo'}</div>
+            </td>
             <td style="text-align:right;">
               <button class="pt-action" onclick="event.stopPropagation();viewPatient(${p.id})" title="Ver expediente"><i class="fa-solid fa-eye"></i></button>
               ${p.tutor_id ? `<button class="pt-action" onclick="event.stopPropagation();openResetPasswordModal(${p.tutor_id})" title="Clave del tutor"><i class="fa-solid fa-key"></i></button>` : ''}
             </td>
           </tr>`;
       }).join('')
-    : `<tr><td colspan="8" style="text-align:center;padding:3rem;color:var(--text-light);">
+    : `<tr><td colspan="9" style="text-align:center;padding:3rem;color:var(--text-light);">
         <i class="fa-solid fa-folder-open" style="font-size:2.5rem;color:var(--primary-light);display:block;margin-bottom:0.75rem;"></i>
         <strong>${q ? 'Sin resultados' : 'Aún no tienes pacientes'}</strong><br>
         <small>${q ? 'Prueba otro término.' : 'Agrega tu primer paciente con el botón "Nuevo paciente".'}</small>
@@ -734,6 +751,7 @@ function renderDoctorDashboard() {
               <th style="text-align:center;">Peso</th>
               <th style="text-align:center;">Talla</th>
               <th>Próxima visita</th>
+              <th style="text-align:center;">Seguimiento</th>
               <th style="text-align:right;">Acciones</th>
             </tr></thead>
             <tbody>${tableRows}</tbody>

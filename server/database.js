@@ -205,6 +205,9 @@ function runMigrations() {
   // Por si la tabla ya existe sin NOT NULL pero sin la columna label
   try { db.prepare('ALTER TABLE appointments ADD COLUMN label TEXT').run(); } catch(e) {}
 
+  // Estado activo/inactivo del paciente
+  try { db.prepare('ALTER TABLE patients ADD COLUMN active INTEGER DEFAULT 1').run(); } catch(e) {}
+
   // Perfil extendido del pediatra
   const userProfileCols = [
     'ALTER TABLE users ADD COLUMN specialty       TEXT',
