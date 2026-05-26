@@ -236,7 +236,7 @@ function renderAdminHome() {
             <div class="stat-pill-value">${totalPediatras}</div>
             <div class="stat-pill-label">Pediatras</div>
             <div class="stat-pill-sub">En la plataforma</div>
-            ${!ro ? `<button class="home-btn home-btn-primary" style="margin-top:0.5rem;" onclick="openModal('userModal');window.editingUserId=null"><i class="fa-solid fa-plus"></i> Añadir Pediatra</button>` : ''}
+            ${!ro ? `<button class="home-btn home-btn-primary" style="margin-top:0.5rem;" onclick="window.editingUserId=null;window.userModalContext='pediatra';openModal('userModal')"><i class="fa-solid fa-plus"></i> Añadir Pediatra</button>` : ''}
           </div>
         </div>
         <div class="stat-pill">
@@ -320,7 +320,7 @@ function renderAdminPediatras() {
       <div class="table-card">
         <div class="table-toolbar">
           <h2 style="font-size:1.05rem;">${filtered.length} pediatra${filtered.length === 1 ? '' : 's'}</h2>
-          ${!ro ? `<button class="topbar-primary" onclick="openModal('userModal');window.editingUserId=null"><i class="fa-solid fa-user-plus"></i> Añadir Pediatra</button>` : ''}
+          ${!ro ? `<button class="topbar-primary" onclick="window.editingUserId=null;window.userModalContext='pediatra';openModal('userModal')"><i class="fa-solid fa-user-plus"></i> Añadir Pediatra</button>` : ''}
         </div>
         <div style="overflow-x:auto;">
           <table class="patients-table">
@@ -508,34 +508,37 @@ function renderAdminUsers() {
               <th style="text-align:right;">Acciones</th>
             </tr></thead>
             <tbody>
-              ${allUsers.filter(u => u.role !== 'tutor').map(u => {
-                const rc = roleColors[u.role] || roleColors.tutor;
-                const isMe = u.id === currentUser.id;
-                return `
-                <tr class="pt-row">
-                  <td>
-                    <div style="display:flex;align-items:center;gap:0.6rem;">
-                      <div class="pt-avatar">${(u.name||'?').charAt(0).toUpperCase()}</div>
-                      <div style="font-weight:600;">${u.name}${isMe ? ' <span style="font-size:0.7rem;color:var(--text-light);font-weight:400;">(tú)</span>' : ''}</div>
-                    </div>
-                  </td>
-                  <td style="color:var(--text-light);font-size:0.85rem;">${u.email}</td>
-                  <td>
-                    <select onchange="changeUserRole(${u.id}, this.value, '${u.role}')" ${isMe ? 'disabled' : ''} style="padding:0.25rem 0.5rem;border:1px solid #e2e8f0;border-radius:6px;font-size:0.78rem;background:${rc.bg};color:${rc.color};font-weight:600;">
-                      <option value="super_admin" ${u.role==='super_admin'?'selected':''}>Super Admin</option>
-                      <option value="admin"       ${u.role==='admin'?'selected':''}>Administrador</option>
-                      <option value="asesor"      ${u.role==='asesor'?'selected':''}>Asesor</option>
-                      <option value="pediatra"    ${u.role==='pediatra'?'selected':''}>Pediatra</option>
-                    </select>
-                  </td>
-                  <td style="font-size:0.82rem;color:var(--text-light);">${u.created_at ? new Date(u.created_at).toLocaleDateString('es-MX') : '—'}</td>
-                  <td style="text-align:right;">
-                    <button class="pt-action" onclick="editUser(${u.id})" title="Editar" ${isMe ? '' : ''}><i class="fa-solid fa-pen"></i></button>
-                    <button class="pt-action" onclick="openResetPasswordForUser(${u.id}, '${u.name.replace(/'/g, "\\'")}')" title="Cambiar contraseña"><i class="fa-solid fa-key"></i></button>
-                    ${!isMe ? `<button class="pt-action" onclick="deleteUser(${u.id})" title="Eliminar" style="color:#ef4444;"><i class="fa-solid fa-trash"></i></button>` : ''}
-                  </td>
-                </tr>`;
-              }).join('')}
+              ${(() => {
+                const adminUsers = allUsers.filter(u => ['super_admin','admin','asesor'].includes(u.role));
+                if (!adminUsers.length) return `<tr><td colspan="5" style="text-align:center;padding:2rem;color:var(--text-light);">No hay administradores registrados.</td></tr>`;
+                return adminUsers.map(u => {
+                  const rc = roleColors[u.role] || roleColors.admin;
+                  const isMe = u.id === currentUser.id;
+                  return `
+                  <tr class="pt-row">
+                    <td>
+                      <div style="display:flex;align-items:center;gap:0.6rem;">
+                        <div class="pt-avatar">${(u.name||'?').charAt(0).toUpperCase()}</div>
+                        <div style="font-weight:600;">${u.name}${isMe ? ' <span style="font-size:0.7rem;color:var(--text-light);font-weight:400;">(tú)</span>' : ''}</div>
+                      </div>
+                    </td>
+                    <td style="color:var(--text-light);font-size:0.85rem;">${u.email}</td>
+                    <td>
+                      <select onchange="changeUserRole(${u.id}, this.value, '${u.role}')" ${isMe ? 'disabled' : ''} style="padding:0.25rem 0.5rem;border:1px solid #e2e8f0;border-radius:6px;font-size:0.78rem;background:${rc.bg};color:${rc.color};font-weight:600;">
+                        <option value="super_admin" ${u.role==='super_admin'?'selected':''}>Super Admin</option>
+                        <option value="admin"       ${u.role==='admin'?'selected':''}>Administrador</option>
+                        <option value="asesor"      ${u.role==='asesor'?'selected':''}>Asesor</option>
+                      </select>
+                    </td>
+                    <td style="font-size:0.82rem;color:var(--text-light);">${u.created_at ? new Date(u.created_at).toLocaleDateString('es-MX') : '—'}</td>
+                    <td style="text-align:right;">
+                      <button class="pt-action" onclick="editUser(${u.id})" title="Editar"><i class="fa-solid fa-pen"></i></button>
+                      <button class="pt-action" onclick="openResetPasswordForUser(${u.id}, '${u.name.replace(/'/g, "\\'")}')" title="Cambiar contraseña"><i class="fa-solid fa-key"></i></button>
+                      ${!isMe ? `<button class="pt-action" onclick="deleteUser(${u.id})" title="Eliminar" style="color:#ef4444;"><i class="fa-solid fa-trash"></i></button>` : ''}
+                    </td>
+                  </tr>`;
+                }).join('');
+              })()}
             </tbody>
           </table>
         </div>
@@ -560,8 +563,8 @@ window.changeUserRole = async function(userId, newRole, oldRole) {
 
 window.openAddUserModal = function() {
   window.editingUserId = null;
+  window.userModalContext = 'admin'; // crear admin/asesor/super_admin
   openModal('userModal');
-  // Tras abrirse, mostrar selector de rol si no está
 };
 
 window.openResetPasswordForUser = function(userId, name) {
@@ -601,7 +604,7 @@ function renderAdminDashboard() {
       <div class="history-section" style="margin-top:2rem;">
         <div style="display:flex;justify-content:space-between;align-items:center;">
           <h2>Gestión de Pediatras</h2>
-          <button class="btn btn-primary" onclick="window.editingUserId=null;openModal('userModal')"><i class="fa-solid fa-user-plus"></i> Añadir Pediatra</button>
+          <button class="btn btn-primary" onclick="window.editingUserId=null;window.userModalContext='pediatra';openModal('userModal')"><i class="fa-solid fa-user-plus"></i> Añadir Pediatra</button>
         </div>
         <div style="background:white;padding:1.5rem;border-radius:15px;margin-top:1rem;box-shadow:var(--card-shadow);overflow-x:auto;">
           <table style="width:100%;text-align:left;border-collapse:collapse;">
@@ -2737,15 +2740,14 @@ function renderModals() {
         <div class="modal-header"><h2 id="userModalTitle">Añadir Pediatra</h2><button class="close-btn" onclick="closeModal('userModal')"><i class="fa-solid fa-xmark"></i></button></div>
         <div class="form-group"><label>Nombre Completo</label><input type="text" id="userModalName" class="form-control" placeholder="Ej. Dra. Ana Gómez"></div>
         <div class="form-group"><label>Correo Electrónico</label><input type="email" id="userModalEmail" class="form-control" placeholder="ej. dra.ana@peditrack.com"></div>
-        ${canManageUsers(currentUser?.role || '') ? `
-        <div class="form-group" id="userModalRoleGroup"><label>Rol</label>
+        <div class="form-group" id="userModalRoleGroup" style="display:none;"><label>Rol</label>
           <select id="userModalRole" class="form-control">
             <option value="pediatra">Pediatra</option>
             <option value="admin">Administrador</option>
             <option value="asesor">Asesor</option>
             <option value="super_admin">Super Admin</option>
           </select>
-        </div>` : ''}
+        </div>
         <div class="form-group">
           <label>Contraseña <small style="color:var(--text-light);font-weight:400;">(autogenerada — puedes editarla)</small></label>
           <div style="display:flex;gap:0.5rem;">
@@ -3808,6 +3810,27 @@ window.openModal = function(id) {
     // Autogenerar contraseña al abrir para crear nuevo usuario
     const pw = document.getElementById('userModalPassword');
     if (pw) pw.value = generateRandomPassword(8);
+    // Configurar selector de rol según el contexto
+    const roleGroup  = document.getElementById('userModalRoleGroup');
+    const roleSelect = document.getElementById('userModalRole');
+    const title      = document.getElementById('userModalTitle');
+    const ctx = window.userModalContext || 'pediatra';
+    if (ctx === 'admin' && canManageUsers(currentUser?.role || '')) {
+      // Crear administrador (super_admin/admin/asesor)
+      if (roleGroup) roleGroup.style.display = '';
+      if (roleSelect) {
+        roleSelect.innerHTML = `
+          <option value="admin">Administrador</option>
+          <option value="asesor">Asesor</option>
+          <option value="super_admin">Super Admin</option>`;
+      }
+      if (title) title.innerText = 'Añadir Administrador';
+    } else {
+      // Crear pediatra (oculta selector — rol fijo)
+      if (roleGroup) roleGroup.style.display = 'none';
+      if (roleSelect) roleSelect.value = 'pediatra';
+      if (title) title.innerText = 'Añadir Pediatra';
+    }
   }
 };
 
