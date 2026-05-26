@@ -1,6 +1,90 @@
-# Guía de Despliegue — PediTrack en fly.io
+# Guía de Despliegue — PediTrack
 
-## Prerequisitos
+Esta guía cubre dos plataformas: **Railway** (recomendado por su simplicidad)
+y **fly.io** (más control, regiones más cercanas a México).
+
+---
+
+## 🚂 Railway (recomendado para empezar)
+
+Railway despliega directamente desde GitHub. No necesitas CLI para el primer
+despliegue.
+
+### Prerequisitos
+
+1. Tener el repo en GitHub: ✅ ya lo tienes (`foresflame/pedi-track`)
+2. Crear cuenta en https://railway.app (puedes usar tu cuenta de GitHub)
+3. Plan: el **Hobby** gratuito ($5 USD de crédito mensual) alcanza para esta app
+
+### Paso 1 — Crear el proyecto
+
+1. Entra a https://railway.app/new
+2. Click en **Deploy from GitHub repo**
+3. Autoriza Railway a leer tus repos (solo la primera vez)
+4. Selecciona **`foresflame/pedi-track`**
+5. Railway detecta el `Dockerfile` y empieza a construir
+
+### Paso 2 — Crear el volumen para SQLite
+
+> **Importante:** sin volumen, los datos se pierden en cada deploy.
+
+1. En el dashboard de Railway, abre tu servicio
+2. Tab **Settings** → sección **Volumes** → **+ New Volume**
+3. Configura:
+   - **Mount path:** `/data`
+   - **Size:** 1 GB
+4. Guarda
+
+El Dockerfile ya crea `/data/db/` y el server usa `DB_PATH=/data/db/peditrack.sqlite`.
+
+### Paso 3 — Configurar variables de entorno
+
+Tab **Variables** → **+ New Variable**. Agrega estas:
+
+| Variable | Valor |
+|---|---|
+| `JWT_SECRET` | Click **Generate** o usa una cadena aleatoria larga |
+| `NODE_ENV` | `production` |
+| `EMAIL_HOST` | `smtp.gmail.com` |
+| `EMAIL_PORT` | `587` |
+| `EMAIL_USER` | tu correo @gmail |
+| `EMAIL_PASS` | App Password de Gmail (ver más abajo) |
+| `EMAIL_FROM` | `PediTrack <tu-correo@gmail.com>` |
+
+> **`PORT` y `DB_PATH` se quedan en sus defaults del Dockerfile** (Railway inyecta
+> su propio `PORT` automáticamente).
+
+#### Cómo crear una App Password de Gmail
+
+1. Activa 2-Step Verification en https://myaccount.google.com/security
+2. Ve a https://myaccount.google.com/apppasswords
+3. Crea una contraseña para "Mail" / "PediTrack"
+4. Copia los 16 caracteres y pégalos en `EMAIL_PASS`
+
+### Paso 4 — Exponer el dominio público
+
+Tab **Settings** → sección **Networking** → **Generate Domain**.
+
+Railway te da una URL tipo `pedi-track-production.up.railway.app`.
+Si tienes dominio propio, agrégalo en **Custom Domain**.
+
+### Paso 5 — Esperar el deploy
+
+Railway construye la imagen Docker y arranca el servicio. Toma ~3-5 minutos
+la primera vez. Verás los logs en vivo en la tab **Deployments**.
+
+Cuando el healthcheck (`/api/health`) pase, tu app está lista.
+
+### Actualizaciones automáticas
+
+Cada `git push` a `main` dispara un nuevo deploy automático. No tienes que
+hacer nada más.
+
+---
+
+## 🛸 Alternativa: fly.io
+
+### Prerequisitos
 
 1. Instalar flyctl: https://fly.io/docs/hands-on/install-flyctl/
 2. Crear cuenta en https://fly.io y autenticarse:
@@ -8,33 +92,18 @@
    fly auth login
    ```
 
-## Primer despliegue
-
-### 1. Crear la app (solo la primera vez)
+### Primer despliegue
 
 ```bash
 cd pedi-track
 
-# Crear la app (elige la región "mia" para México)
+# Crear la app (región "mia" = Miami, cerca de México)
 fly launch --name pedi-track --region mia --no-deploy
 
-# Si la app ya existe en fly.toml, solo registrar:
-fly apps create pedi-track
-```
-
-### 2. Crear el volumen persistente para SQLite
-
-```bash
-# Volumen de 1 GB en la misma región que la app
+# Crear el volumen persistente para SQLite (1 GB)
 fly volumes create peditrack_data --size 1 --region mia
-```
 
-> ⚠️ El volumen debe existir antes del primer deploy. El archivo `fly.toml`
-> lo monta en `/data`; la app crea `/data/db/peditrack.sqlite` automáticamente.
-
-### 3. Configurar secretos (variables de entorno sensibles)
-
-```bash
+# Configurar secretos
 fly secrets set \
   JWT_SECRET="$(openssl rand -hex 32)" \
   EMAIL_HOST="smtp.gmail.com" \
@@ -42,84 +111,66 @@ fly secrets set \
   EMAIL_USER="peditrack@gmail.com" \
   EMAIL_PASS="tu_app_password_gmail" \
   EMAIL_FROM="PediTrack <peditrack@gmail.com>"
-```
 
-> Para Gmail necesitas una **App Password** (2FA activado):
-> Google Account → Security → 2-Step Verification → App passwords
-
-### 4. Desplegar
-
-```bash
+# Desplegar
 fly deploy
-```
 
-El deploy construye la imagen Docker, la sube a fly.io y arranca la máquina.
-El primer arranque ejecuta las migraciones y crea los usuarios de prueba.
-
-### 5. Abrir la app
-
-```bash
+# Abrir en el navegador
 fly open
 ```
 
----
-
-## Actualizaciones posteriores
+### Comandos útiles de fly.io
 
 ```bash
-# Simplemente:
-fly deploy
+fly logs                                          # Logs en tiempo real
+fly ssh console                                   # SSH a la máquina
+fly ssh console -C "sqlite3 /data/db/peditrack.sqlite '.tables'"  # Inspeccionar DB
+fly status                                        # Estado de la máquina
+fly secrets list                                  # Ver secretos (solo nombres)
+fly scale memory 512                              # Escalar memoria a 512 MB
 ```
-
-fly.io hace rolling deploy — la app no tiene downtime durante actualizaciones.
 
 ---
 
-## Variables de entorno disponibles
+## Variables de entorno (referencia)
 
-| Variable     | Descripción                         | Default en Docker        |
-|--------------|-------------------------------------|--------------------------|
-| `NODE_ENV`   | Modo de ejecución                   | `production`             |
-| `PORT`       | Puerto interno del servidor         | `8080`                   |
-| `DB_PATH`    | Ruta al archivo SQLite              | `/data/db/peditrack.sqlite` |
-| `JWT_SECRET` | Secreto para firmar JWT (requerido) | —                        |
-| `EMAIL_HOST` | Servidor SMTP                       | `smtp.gmail.com`         |
-| `EMAIL_PORT` | Puerto SMTP                         | `587`                    |
-| `EMAIL_USER` | Cuenta de correo                    | —                        |
-| `EMAIL_PASS` | Contraseña / App Password           | —                        |
-| `EMAIL_FROM` | Nombre y dirección del remitente    | —                        |
+| Variable | Descripción | Default |
+|---|---|---|
+| `NODE_ENV` | Modo de ejecución | `production` |
+| `PORT` | Puerto interno (Railway lo inyecta) | `8080` |
+| `DB_PATH` | Ruta del archivo SQLite | `/data/db/peditrack.sqlite` |
+| `JWT_SECRET` | Secreto para firmar JWT (**requerido**) | — |
+| `EMAIL_HOST` | Servidor SMTP | `smtp.gmail.com` |
+| `EMAIL_PORT` | Puerto SMTP | `587` |
+| `EMAIL_USER` | Cuenta de correo | — |
+| `EMAIL_PASS` | App Password de Gmail | — |
+| `EMAIL_FROM` | Remitente formateado | — |
 
 ---
 
-## Comandos útiles
+## Cuenta de prueba inicial
 
-```bash
-# Ver logs en tiempo real
-fly logs
+Cuando arranca por primera vez, el servidor crea estos usuarios en la DB:
 
-# Conectarse por SSH a la máquina
-fly ssh console
+| Email | Contraseña | Rol |
+|---|---|---|
+| `admin@peditrack.com` | `Admin2024!` | super_admin |
+| `doc@peditrack.com` | `Doc2024!` | pediatra |
+| `tutor@peditrack.com` | `Tutor2024!` | tutor |
 
-# Inspeccionar la base de datos
-fly ssh console -C "sqlite3 /data/db/peditrack.sqlite '.tables'"
-
-# Ver estado de la máquina
-fly status
-
-# Ver secretos configurados (solo nombres, no valores)
-fly secrets list
-
-# Escalar memoria si hace falta
-fly scale memory 512
-```
+> **⚠️ Cámbialas inmediatamente después del primer login en producción.**
 
 ---
 
 ## Consideraciones de producción
 
-- **SQLite en fly.io funciona bien** para cargas moderadas gracias al volumen persistente.
-  Para escalar a múltiples regiones simultáneas considera migrar a Postgres con `fly postgres`.
-- **Backups**: programa backups del volumen con `fly volumes snapshots`.
-- **HTTPS**: fly.io provisiona TLS automáticamente — `force_https = true` en `fly.toml`.
-- **Auto-stop**: la máquina se apaga cuando no hay tráfico y arranca al primer request
-  (cold start ~2s). Configura `min_machines_running = 1` si necesitas respuesta inmediata.
+- **SQLite + volumen persistente** funciona bien para cargas moderadas
+  (decenas de pediatras, miles de pacientes). Para escalar horizontalmente
+  considera migrar a PostgreSQL.
+- **Backups:** descarga `/data/db/peditrack.sqlite` periódicamente.
+  En Railway: `Settings → Volumes → Download`. En fly.io: `fly volumes snapshots`.
+- **HTTPS** se provisiona automáticamente en ambas plataformas.
+- **Healthcheck** en `/api/health` (ya configurado en `railway.toml`).
+- **Logs:** Railway los muestra en el dashboard; fly.io con `fly logs`.
+- **Costo aproximado en Railway:** ~$3-5 USD/mes con el plan Hobby para una
+  app pequeña con volumen de 1 GB y tráfico moderado.

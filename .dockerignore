@@ -1,13 +1,24 @@
 node_modules
+npm-debug.log
 .git
+.gitignore
 .env
-server/db
+.env.*
+.vscode
+.idea
+.claude
 *.log
+.DS_Store
+Thumbs.db
+server/db
+server/db/*.sqlite
+server/db/*.sqlite-journal
 *.md
-PLAN.md
 fly.toml
+railway.toml
 Dockerfile
 .dockerignore
+# Archivos legacy en la raíz (la app sirve desde /public)
 app.js
 index.html
 styles.css
