@@ -34,6 +34,7 @@ let currentPatientId  = null;
 let currentView     = 'login';
 let currentOnboardingStep = 1;
 let patientSearchQuery = '';
+let patientFilterMode  = 'all'; // 'all' | 'allergies' | 'overdue' | 'pending' | 'inactive'
 let tutorAppointments = [];
 let bookingYear  = new Date().getFullYear();
 let bookingMonth = new Date().getMonth();
@@ -787,7 +788,12 @@ window.togglePatientActive = async function(patientId, active) {
 window.topbarFilterPatients = function(q) {
   patientSearchQuery = q || '';
   // Re-render solo si estamos en un dashboard con lista
-  if (currentView === 'doctor-dashboard' || currentView === 'admin-dashboard') renderApp();
+  if (['doctor-dashboard','admin-dashboard','admin-pediatras'].includes(currentView)) renderApp();
+};
+
+window.setPatientFilter = function(mode) {
+  patientFilterMode = mode;
+  renderApp();
 };
 
 function renderDoctorHome() {
@@ -921,10 +927,27 @@ function renderDoctorHome() {
 
 function renderDoctorDashboard() {
   const q = patientSearchQuery.toLowerCase();
-  const visiblePatients = q ? patients.filter(p => p.name.toLowerCase().includes(q)) : patients;
+  const today = new Date().toISOString().slice(0, 10);
+
+  // Aplicar filtro por modo + búsqueda
+  let visiblePatients = patients.slice();
+  if (q) visiblePatients = visiblePatients.filter(p => p.name.toLowerCase().includes(q));
+  if (patientFilterMode === 'allergies') {
+    visiblePatients = visiblePatients.filter(p => {
+      const a = (p.onboarding_data && p.onboarding_data['known-allergies'] || '').trim();
+      return a && !/^(ninguna|ninguno|no|n\/a|na|sin alergias?)$/i.test(a);
+    });
+  } else if (patientFilterMode === 'overdue') {
+    visiblePatients = visiblePatients.filter(p => p.next_visit_date && new Date(p.next_visit_date) < new Date(today));
+  } else if (patientFilterMode === 'pending') {
+    // se calcula abajo con pendingByPatient, pero ya podemos preparar
+  } else if (patientFilterMode === 'inactive') {
+    visiblePatients = visiblePatients.filter(p => p.active === 0);
+  } else if (patientFilterMode === 'all') {
+    // Sin filtro adicional
+  }
 
   // Próximas visitas en los próximos 7 días o vencidas
-  const today = new Date().toISOString().slice(0, 10);
   const upcomingPatients = patients.filter(p => {
     if (!p.next_visit_date) return false;
     const daysLeft = Math.round((new Date(p.next_visit_date) - new Date(today)) / 86_400_000);
@@ -983,6 +1006,11 @@ function renderDoctorDashboard() {
     .filter(a => a.status === 'pendiente' && a.patient_id && a.date >= today)
     .sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time))
     .forEach(a => { if (!pendingByPatient[a.patient_id]) pendingByPatient[a.patient_id] = a; });
+
+  // Aplicar filtro 'pending' ahora que tenemos pendingByPatient
+  if (patientFilterMode === 'pending') {
+    visiblePatients = visiblePatients.filter(p => pendingByPatient[p.id]);
+  }
 
   const patientsHtml = visiblePatients.length > 0
     ? visiblePatients.map(p => {
@@ -1143,9 +1171,11 @@ function renderDoctorDashboard() {
       <div class="table-card">
         <div class="table-toolbar">
           <div class="filter-pills">
-            <button class="pill is-active">Todos</button>
-            <button class="pill" onclick="topbarFilterPatients('');alert('Filtros adicionales próximamente.')">Con alergias</button>
-            <button class="pill" onclick="topbarFilterPatients('');alert('Filtros adicionales próximamente.')">Visita vencida</button>
+            <button class="pill ${patientFilterMode === 'all'       ? 'is-active' : ''}" onclick="setPatientFilter('all')">Todos</button>
+            <button class="pill ${patientFilterMode === 'allergies' ? 'is-active' : ''}" onclick="setPatientFilter('allergies')">Con alergias</button>
+            <button class="pill ${patientFilterMode === 'overdue'   ? 'is-active' : ''}" onclick="setPatientFilter('overdue')">Visita vencida</button>
+            <button class="pill ${patientFilterMode === 'pending'   ? 'is-active' : ''}" onclick="setPatientFilter('pending')">Cita solicitada</button>
+            <button class="pill ${patientFilterMode === 'inactive'  ? 'is-active' : ''}" onclick="setPatientFilter('inactive')">Inactivos</button>
           </div>
           <div style="color:var(--text-light);font-size:0.85rem;">${visiblePatients.length} de ${totalPatients} pacientes</div>
         </div>
