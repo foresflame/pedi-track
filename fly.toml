@@ -2,7 +2,7 @@
 # Docs: https://fly.io/docs/reference/configuration/
 
 app      = "pedi-track"
-primary_region = "mia"       # Miami — closest to Mexico
+primary_region = "dfw"       # Dallas — closest to Mexico after Miami was retired
 
 [build]
   dockerfile = "Dockerfile"

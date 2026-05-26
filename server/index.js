@@ -33,7 +33,7 @@ app.get('*', (req, res) => {
 
 initDB();
 
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`\nðŸ¥ PediTrack server corriendo en http://localhost:${PORT}`);
   console.log(`   Credenciales de prueba:`);
   console.log(`   admin@peditrack.com / Admin2024!`);
