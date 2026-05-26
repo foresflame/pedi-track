@@ -68,26 +68,37 @@ router.get('/:id/public', (req, res) => {
   res.json(row);
 });
 
-// GET /api/users — todos los usuarios (admin)
-router.get('/', requireRole('admin'), (req, res) => {
+// GET /api/users — todos los usuarios (admin, asesor)
+router.get('/', requireRole('admin', 'asesor'), (req, res) => {
   const rows = db.prepare(`SELECT ${SAFE_FIELDS} FROM users ORDER BY role, name`).all();
   res.json(rows);
 });
 
-// GET /api/users/pediatras — solo pediatras
-router.get('/pediatras', requireRole('admin'), (req, res) => {
+// GET /api/users/pediatras — solo pediatras (admin, asesor)
+router.get('/pediatras', requireRole('admin', 'asesor'), (req, res) => {
   const rows = db.prepare(`SELECT ${SAFE_FIELDS} FROM users WHERE role = 'pediatra' ORDER BY name`).all();
   res.json(rows);
 });
 
-// POST /api/users — crear pediatra (admin)
+// GET /api/users/:id — detalle de usuario (admin, asesor)
+router.get('/:id(\\d+)', requireRole('admin', 'asesor'), (req, res) => {
+  const id = parseInt(req.params.id);
+  const row = db.prepare(`SELECT ${SAFE_FIELDS} FROM users WHERE id = ?`).get(id);
+  if (!row) return res.status(404).json({ error: 'Usuario no encontrado' });
+  res.json(row);
+});
+
+// POST /api/users — crear usuario (solo super_admin para asesores/admins; admin puede crear pediatras)
 router.post('/', requireRole('admin'), (req, res) => {
   const { name, email, password, role } = req.body;
   if (!name || !email || !password) {
     return res.status(400).json({ error: 'Nombre, email y contraseña son requeridos' });
   }
-  if (!['pediatra', 'admin'].includes(role)) {
-    return res.status(400).json({ error: 'Rol inválido. Usa pediatra o admin.' });
+  const allowedRoles = req.user.role === 'super_admin'
+    ? ['pediatra','admin','asesor','super_admin']
+    : ['pediatra'];
+  if (!allowedRoles.includes(role || 'pediatra')) {
+    return res.status(403).json({ error: 'No tienes permiso para crear este tipo de usuario' });
   }
 
   const exists = db.prepare('SELECT id FROM users WHERE email = ?').get(email.trim().toLowerCase());
@@ -100,7 +111,7 @@ router.post('/', requireRole('admin'), (req, res) => {
   res.status(201).json({ id: result.lastInsertRowid, name: name.trim(), email: email.trim().toLowerCase(), role: role || 'pediatra' });
 });
 
-// PUT /api/users/:id — editar usuario (admin)
+// PUT /api/users/:id — editar usuario (admin para no-admins; super_admin para todos)
 router.put('/:id', requireRole('admin'), (req, res) => {
   const id = parseInt(req.params.id);
   const { name, email, password } = req.body;
@@ -108,8 +119,11 @@ router.put('/:id', requireRole('admin'), (req, res) => {
   const user = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
   if (!user) return res.status(404).json({ error: 'Usuario no encontrado' });
 
-  if (user.role === 'admin' && id !== req.user.id) {
-    return res.status(403).json({ error: 'No puedes editar a otro administrador' });
+  // Solo super_admin puede editar a otros admins/super_admins/asesores
+  if (['admin','super_admin','asesor'].includes(user.role)
+      && req.user.role !== 'super_admin'
+      && id !== req.user.id) {
+    return res.status(403).json({ error: 'Solo super_admin puede editar este tipo de usuario' });
   }
 
   const newName  = name  ? name.trim()  : user.name;
@@ -127,7 +141,22 @@ router.put('/:id', requireRole('admin'), (req, res) => {
   res.json({ id, name: newName, email: newEmail, role: user.role });
 });
 
-// DELETE /api/users/:id — eliminar usuario (admin)
+// PUT /api/users/:id/role — cambiar rol (solo super_admin)
+router.put('/:id/role', requireRole('admin'), (req, res) => {
+  if (req.user.role !== 'super_admin') return res.status(403).json({ error: 'Solo super_admin puede cambiar roles' });
+  const id = parseInt(req.params.id);
+  const { role } = req.body;
+  if (!['super_admin','admin','asesor','pediatra'].includes(role)) {
+    return res.status(400).json({ error: 'Rol inválido' });
+  }
+  const user = db.prepare('SELECT id FROM users WHERE id = ?').get(id);
+  if (!user) return res.status(404).json({ error: 'Usuario no encontrado' });
+  if (id === req.user.id) return res.status(400).json({ error: 'No puedes cambiar tu propio rol' });
+  db.prepare('UPDATE users SET role = ? WHERE id = ?').run(role, id);
+  res.json({ id, role });
+});
+
+// DELETE /api/users/:id — eliminar usuario (super_admin)
 router.delete('/:id', requireRole('admin'), (req, res) => {
   const id = parseInt(req.params.id);
   if (id === req.user.id) {
@@ -136,6 +165,11 @@ router.delete('/:id', requireRole('admin'), (req, res) => {
 
   const user = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
   if (!user) return res.status(404).json({ error: 'Usuario no encontrado' });
+
+  // Solo super_admin puede eliminar a otros admins/asesores
+  if (['admin','super_admin','asesor'].includes(user.role) && req.user.role !== 'super_admin') {
+    return res.status(403).json({ error: 'Solo super_admin puede eliminar este tipo de usuario' });
+  }
 
   // Desasignar pacientes del doctor eliminado
   db.prepare('UPDATE patients SET doctor_id = NULL WHERE doctor_id = ?').run(id);

@@ -208,6 +208,53 @@ function runMigrations() {
   // Estado activo/inactivo del paciente
   try { db.prepare('ALTER TABLE patients ADD COLUMN active INTEGER DEFAULT 1').run(); } catch(e) {}
 
+  // Niveles de admin: super_admin, admin, asesor (además de pediatra y tutor)
+  // SQLite no permite ALTER de un CHECK constraint — recreamos la tabla
+  const userCols = db.prepare('PRAGMA table_info(users)').all();
+  const hasNewRoles = (() => {
+    try {
+      // Probamos insertar y deshacer
+      db.exec('SAVEPOINT role_check; INSERT INTO users (name,email,password,role) VALUES (\'__t\',\'__t@__.com\',\'x\',\'asesor\'); ROLLBACK TO role_check; RELEASE role_check;');
+      return true;
+    } catch(e) {
+      try { db.exec('ROLLBACK TO role_check; RELEASE role_check;'); } catch(_) {}
+      return false;
+    }
+  })();
+  if (!hasNewRoles && userCols.length > 0) {
+    db.pragma('foreign_keys = OFF');
+    const colNames = userCols.map(c => c.name).join(', ');
+    db.exec(`
+      CREATE TABLE users_v2 (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        name       TEXT    NOT NULL,
+        email      TEXT    NOT NULL UNIQUE,
+        password   TEXT    NOT NULL,
+        role       TEXT    NOT NULL CHECK(role IN ('super_admin','admin','asesor','pediatra','tutor')),
+        created_at TEXT    DEFAULT (datetime('now')),
+        specialty       TEXT,
+        license         TEXT,
+        phone           TEXT,
+        office_address  TEXT,
+        description     TEXT,
+        photo           TEXT,
+        social_facebook  TEXT,
+        social_instagram TEXT,
+        social_whatsapp  TEXT,
+        social_website   TEXT
+      );
+      INSERT INTO users_v2 (${colNames}) SELECT ${colNames} FROM users;
+      DROP TABLE users;
+      ALTER TABLE users_v2 RENAME TO users;
+    `);
+    db.pragma('foreign_keys = ON');
+  }
+
+  // Promover admin@peditrack.com a super_admin si aún no lo es
+  try {
+    db.prepare("UPDATE users SET role = 'super_admin' WHERE email = 'admin@peditrack.com' AND role = 'admin'").run();
+  } catch(e) {}
+
   // Perfil extendido del pediatra
   const userProfileCols = [
     'ALTER TABLE users ADD COLUMN specialty       TEXT',

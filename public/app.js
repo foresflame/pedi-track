@@ -47,11 +47,14 @@ let dcAllAppts = [];
 let dcDaySlots = [];
 
 function getRoleDefaultView(role) {
-  if (role === 'admin')    return 'admin-dashboard';
+  if (['admin','super_admin','asesor'].includes(role)) return 'admin-home';
   if (role === 'pediatra') return 'doctor-home';
   if (role === 'tutor')    return 'parent-profile';
   return 'login';
 }
+function isAdminLike(role) { return ['admin','super_admin','asesor'].includes(role); }
+function canEdit(role) { return ['admin','super_admin'].includes(role); }
+function canManageUsers(role) { return role === 'super_admin'; }
 
 // === Bootstrap & Data Loading ===
 async function bootstrap() {
@@ -81,7 +84,7 @@ async function refreshData() {
       }
     } else {
       patients = (await API.get('/patients')) || [];
-      if (currentUser.role === 'admin') {
+      if (isAdminLike(currentUser.role)) {
         pediatricians = (await API.get('/users/pediatras')) || [];
       }
       if (currentUser.role === 'pediatra') {
@@ -99,12 +102,16 @@ function renderApp() {
 
   // Roles con shell de aplicación (sidebar + topbar)
   const useShell = currentUser
-    && (currentUser.role === 'pediatra' || currentUser.role === 'admin')
+    && (currentUser.role === 'pediatra' || isAdminLike(currentUser.role))
     && currentView !== 'login'
     && currentView !== 'onboarding-success';
 
   let viewHtml = '';
   if      (currentView === 'login')               viewHtml = renderLogin();
+  else if (currentView === 'admin-home')          viewHtml = renderAdminHome();
+  else if (currentView === 'admin-pediatras')     viewHtml = renderAdminPediatras();
+  else if (currentView === 'admin-pediatra-detail') viewHtml = renderAdminPediatraDetail();
+  else if (currentView === 'admin-users')         viewHtml = renderAdminUsers();
   else if (currentView === 'admin-dashboard')     viewHtml = renderAdminDashboard();
   else if (currentView === 'doctor-home')         viewHtml = renderDoctorHome();
   else if (currentView === 'doctor-dashboard')    viewHtml = renderDoctorDashboard();
@@ -147,6 +154,8 @@ function renderApp() {
   if (currentView === 'availability-settings') { loadAvailability(); loadDoctorCalendar(); }
   if (currentView === 'doctor-profile-edit')  loadOwnProfile();
   if (currentView === 'doctor-public')        loadDoctorPublic();
+  if (currentView === 'admin-pediatra-detail') loadPediatraDetail();
+  if (currentView === 'admin-users')          { if (!allUsers.length) loadAllUsers(); }
 }
 
 // === Views ===
@@ -184,6 +193,391 @@ function renderLogin() {
     </div>
   `;
 }
+
+// === Admin: Inicio (estadísticas) ===
+let allUsers = [];
+function renderAdminHome() {
+  const ro = !canEdit(currentUser.role); // asesor → solo lectura
+  const totalPediatras = pediatricians.length;
+  const totalPatients = patients.length;
+  const activePatients = patients.filter(p => p.active !== 0).length;
+  const inactivePatients = totalPatients - activePatients;
+  const orphanPatients = patients.filter(p => !p.doctor_id).length;
+  const withAllergies = patients.filter(p => {
+    const a = (p.onboarding_data && p.onboarding_data['known-allergies'] || '').trim();
+    return a && !/^(ninguna|ninguno|no|n\/a|na|sin alergias?)$/i.test(a);
+  }).length;
+  // Crecimiento: pacientes registrados últimos 30 días
+  const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - 30);
+  const cutoffStr = cutoff.toISOString().slice(0,10);
+  const newPatients30d = patients.filter(p => (p.created_at || '').slice(0,10) >= cutoffStr).length;
+  const tutorsCount = patients.filter(p => p.tutor_id).length;
+
+  // Top pediatras por # de pacientes
+  const topPediatras = pediatricians
+    .map(d => ({ ...d, count: patients.filter(p => p.doctor_id === d.id && p.active !== 0).length }))
+    .sort((a,b) => b.count - a.count)
+    .slice(0, 5);
+
+  return `
+    <div class="dashboard-v2">
+      <div class="hero-banner">
+        <div>
+          <h1 style="font-size:1.75rem;margin-bottom:0.4rem;">Panel de ${({super_admin:'Super Admin',admin:'Administración',asesor:'Asesoría'})[currentUser.role]}</h1>
+          <p style="color:var(--text-light);">Resumen general de la plataforma${ro ? ' (modo lectura)' : ''}</p>
+        </div>
+        <div class="hero-illustration"><i class="fa-solid fa-chart-line"></i></div>
+      </div>
+
+      <div class="stats-row">
+        <div class="stat-pill">
+          <div class="stat-pill-icon" style="background:#dbeafe;color:#2563eb;"><i class="fa-solid fa-user-doctor"></i></div>
+          <div style="flex:1;">
+            <div class="stat-pill-value">${totalPediatras}</div>
+            <div class="stat-pill-label">Pediatras</div>
+            <div class="stat-pill-sub">En la plataforma</div>
+            ${!ro ? `<button class="home-btn home-btn-primary" style="margin-top:0.5rem;" onclick="openModal('userModal');window.editingUserId=null"><i class="fa-solid fa-plus"></i> Añadir Pediatra</button>` : ''}
+          </div>
+        </div>
+        <div class="stat-pill">
+          <div class="stat-pill-icon" style="background:#d1fae5;color:#059669;"><i class="fa-solid fa-children"></i></div>
+          <div><div class="stat-pill-value">${activePatients}</div><div class="stat-pill-label">Pacientes activos</div><div class="stat-pill-sub">En seguimiento</div></div>
+        </div>
+        <div class="stat-pill">
+          <div class="stat-pill-icon" style="background:#fef3c7;color:#d97706;"><i class="fa-solid fa-user-plus"></i></div>
+          <div><div class="stat-pill-value">${newPatients30d}</div><div class="stat-pill-label">Nuevos (30 días)</div><div class="stat-pill-sub">Crecimiento reciente</div></div>
+        </div>
+        <div class="stat-pill">
+          <div class="stat-pill-icon" style="background:#ede9fe;color:#7c3aed;"><i class="fa-solid fa-users"></i></div>
+          <div><div class="stat-pill-value">${tutorsCount}</div><div class="stat-pill-label">Tutores</div><div class="stat-pill-sub">Cuentas registradas</div></div>
+        </div>
+      </div>
+
+      <div class="stats-row" style="grid-template-columns:repeat(3,1fr);">
+        <div class="stat-pill">
+          <div class="stat-pill-icon" style="background:#f1f5f9;color:#475569;"><i class="fa-solid fa-pause"></i></div>
+          <div><div class="stat-pill-value">${inactivePatients}</div><div class="stat-pill-label">Pacientes inactivos</div><div class="stat-pill-sub">Sin seguimiento</div></div>
+        </div>
+        <div class="stat-pill">
+          <div class="stat-pill-icon" style="background:#fee2e2;color:#dc2626;"><i class="fa-solid fa-triangle-exclamation"></i></div>
+          <div><div class="stat-pill-value">${withAllergies}</div><div class="stat-pill-label">Con alergias</div><div class="stat-pill-sub">Requieren atención</div></div>
+        </div>
+        <div class="stat-pill">
+          <div class="stat-pill-icon" style="background:#fef9c3;color:#a16207;"><i class="fa-solid fa-circle-question"></i></div>
+          <div><div class="stat-pill-value">${orphanPatients}</div><div class="stat-pill-label">Sin pediatra</div><div class="stat-pill-sub">Por asignar</div></div>
+        </div>
+      </div>
+
+      <div class="table-card">
+        <div class="table-toolbar">
+          <h2 style="font-size:1.1rem;"><i class="fa-solid fa-trophy" style="color:#f59e0b;"></i> Top pediatras por pacientes activos</h2>
+        </div>
+        <div style="overflow-x:auto;">
+          <table class="patients-table">
+            <thead><tr>
+              <th style="text-align:center;width:60px;">#</th>
+              <th>Pediatra</th>
+              <th>Correo</th>
+              <th style="text-align:center;">Pacientes activos</th>
+              <th style="text-align:right;">Acciones</th>
+            </tr></thead>
+            <tbody>
+              ${topPediatras.length ? topPediatras.map((d, i) => `
+                <tr class="pt-row" onclick="viewPediatraDetail(${d.id})">
+                  <td style="text-align:center;font-weight:700;color:${i === 0 ? '#f59e0b' : 'var(--text-light)'};">${i + 1}</td>
+                  <td>
+                    <div style="display:flex;align-items:center;gap:0.6rem;">
+                      <div class="pt-avatar">${(d.name||'?').charAt(0).toUpperCase()}</div>
+                      <div style="font-weight:600;">${d.name}</div>
+                    </div>
+                  </td>
+                  <td style="color:var(--text-light);font-size:0.85rem;">${d.email}</td>
+                  <td style="text-align:center;font-weight:600;color:var(--primary);">${d.count}</td>
+                  <td style="text-align:right;"><button class="pt-action" onclick="event.stopPropagation();viewPediatraDetail(${d.id})" title="Ver detalle"><i class="fa-solid fa-eye"></i></button></td>
+                </tr>`).join('') : `<tr><td colspan="5" style="text-align:center;padding:2rem;color:var(--text-light);">Aún no hay pediatras registrados.</td></tr>`}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>`;
+}
+
+// === Admin: Lista de Pediatras ===
+function renderAdminPediatras() {
+  const ro = !canEdit(currentUser.role);
+  const q = (patientSearchQuery || '').toLowerCase();
+  const filtered = q ? pediatricians.filter(d => d.name.toLowerCase().includes(q) || (d.email||'').toLowerCase().includes(q)) : pediatricians;
+  return `
+    <div class="dashboard-v2">
+      <div class="hero-banner">
+        <div>
+          <h1 style="font-size:1.75rem;margin-bottom:0.4rem;">Pediatras</h1>
+          <p style="color:var(--text-light);">Gestiona los pediatras de la plataforma${ro ? ' (modo lectura)' : ''}</p>
+        </div>
+        <div class="hero-illustration"><i class="fa-solid fa-user-doctor"></i></div>
+      </div>
+
+      <div class="table-card">
+        <div class="table-toolbar">
+          <h2 style="font-size:1.05rem;">${filtered.length} pediatra${filtered.length === 1 ? '' : 's'}</h2>
+          ${!ro ? `<button class="topbar-primary" onclick="openModal('userModal');window.editingUserId=null"><i class="fa-solid fa-user-plus"></i> Añadir Pediatra</button>` : ''}
+        </div>
+        <div style="overflow-x:auto;">
+          <table class="patients-table">
+            <thead><tr>
+              <th>Pediatra</th>
+              <th>Correo</th>
+              <th>Especialidad</th>
+              <th style="text-align:center;">Pacientes</th>
+              <th style="text-align:right;">Acciones</th>
+            </tr></thead>
+            <tbody>
+              ${filtered.length ? filtered.map(d => {
+                const count = patients.filter(p => p.doctor_id === d.id).length;
+                return `
+                <tr class="pt-row" onclick="viewPediatraDetail(${d.id})">
+                  <td>
+                    <div style="display:flex;align-items:center;gap:0.6rem;">
+                      <div class="pt-avatar">${(d.photo) ? `<img src="${d.photo}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">` : (d.name||'?').charAt(0).toUpperCase()}</div>
+                      <div>
+                        <div style="font-weight:600;">${d.name}</div>
+                        <div style="font-size:0.75rem;color:var(--text-light);">${d.license ? 'Cédula ' + d.license : 'Sin cédula'}</div>
+                      </div>
+                    </div>
+                  </td>
+                  <td style="color:var(--text-light);font-size:0.85rem;">${d.email}</td>
+                  <td style="font-size:0.85rem;">${d.specialty || '<span style="color:var(--text-light);font-style:italic;">No especificada</span>'}</td>
+                  <td style="text-align:center;font-weight:600;color:var(--primary);">${count}</td>
+                  <td style="text-align:right;">
+                    <button class="pt-action" onclick="event.stopPropagation();viewPediatraDetail(${d.id})" title="Ver detalle"><i class="fa-solid fa-eye"></i></button>
+                    ${!ro ? `
+                      <button class="pt-action" onclick="event.stopPropagation();editUser(${d.id})" title="Editar"><i class="fa-solid fa-pen"></i></button>
+                      <button class="pt-action" onclick="event.stopPropagation();openResetPasswordForUser(${d.id}, '${d.name.replace(/'/g, "\\'")}')" title="Cambiar contraseña"><i class="fa-solid fa-key"></i></button>
+                      <button class="pt-action" onclick="event.stopPropagation();deleteUser(${d.id})" title="Eliminar" style="color:#ef4444;"><i class="fa-solid fa-trash"></i></button>
+                    ` : ''}
+                  </td>
+                </tr>`;
+              }).join('') : `<tr><td colspan="5" style="text-align:center;padding:3rem;color:var(--text-light);"><i class="fa-solid fa-user-doctor" style="font-size:2.5rem;color:var(--primary-light);display:block;margin-bottom:0.75rem;"></i><strong>${q ? 'Sin resultados' : 'No hay pediatras'}</strong></td></tr>`}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>`;
+}
+
+// === Admin: Detalle de un pediatra ===
+let viewingPediatraId = null;
+let viewingPediatraData = null;
+async function loadPediatraDetail() {
+  if (!viewingPediatraId) return;
+  if (viewingPediatraData && viewingPediatraData.id === viewingPediatraId) return;
+  try { viewingPediatraData = await API.get(`/users/${viewingPediatraId}`); renderApp(); } catch(e) { console.error(e.message); }
+}
+window.viewPediatraDetail = function(id) {
+  viewingPediatraId = id;
+  viewingPediatraData = null;
+  navigate('admin-pediatra-detail');
+};
+function renderAdminPediatraDetail() {
+  const d = viewingPediatraData;
+  if (!d) return `<div class="dashboard-v2"><p style="text-align:center;padding:3rem;color:var(--text-light);">Cargando...</p></div>`;
+  const ro = !canEdit(currentUser.role);
+  const docPatients = patients.filter(p => p.doctor_id === d.id);
+  const activeCount = docPatients.filter(p => p.active !== 0).length;
+  return `
+    <div class="dashboard-v2">
+      <button class="btn btn-secondary" style="margin-bottom:1rem;" onclick="navigate('admin-pediatras')"><i class="fa-solid fa-arrow-left"></i> Volver a Pediatras</button>
+
+      <div style="background:white;border-radius:16px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.04);border:1px solid #f1f5f9;margin-bottom:1.5rem;">
+        <div style="background:linear-gradient(135deg,var(--primary),var(--secondary));padding:2rem;display:flex;align-items:center;gap:1.5rem;color:white;">
+          <div style="width:100px;height:100px;border-radius:50%;background:white;overflow:hidden;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+            ${d.photo ? `<img src="${d.photo}" style="width:100%;height:100%;object-fit:cover;">` : `<i class="fa-solid fa-user-doctor" style="font-size:3rem;color:var(--primary);"></i>`}
+          </div>
+          <div style="flex:1;">
+            <h1 style="font-size:1.8rem;margin-bottom:0.3rem;">${d.name}</h1>
+            <div style="font-size:1rem;opacity:0.95;">${d.specialty || 'Pediatría general'}</div>
+            ${d.license ? `<div style="font-size:0.85rem;opacity:0.85;margin-top:0.2rem;">Cédula: ${d.license}</div>` : ''}
+          </div>
+          ${!ro ? `
+            <div style="display:flex;flex-direction:column;gap:0.5rem;">
+              <button class="btn" style="background:white;color:var(--primary);" onclick="editUser(${d.id})"><i class="fa-solid fa-pen"></i> Editar</button>
+              <button class="btn" style="background:rgba(255,255,255,0.2);color:white;border:1px solid rgba(255,255,255,0.5);" onclick="openResetPasswordForUser(${d.id}, '${d.name.replace(/'/g, "\\'")}')"><i class="fa-solid fa-key"></i> Cambiar clave</button>
+            </div>
+          ` : ''}
+        </div>
+
+        <div style="padding:1.5rem;display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1rem;">
+          ${d.email ? `<div style="background:var(--bg-color);padding:0.85rem 1rem;border-radius:10px;"><div style="font-size:0.72rem;color:var(--text-light);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:0.2rem;"><i class="fa-solid fa-envelope"></i> Correo</div><div style="font-weight:500;font-size:0.88rem;word-break:break-all;">${d.email}</div></div>` : ''}
+          ${d.phone ? `<div style="background:var(--bg-color);padding:0.85rem 1rem;border-radius:10px;"><div style="font-size:0.72rem;color:var(--text-light);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:0.2rem;"><i class="fa-solid fa-phone"></i> Teléfono</div><div style="font-weight:500;font-size:0.88rem;">${d.phone}</div></div>` : ''}
+          ${d.office_address ? `<div style="background:var(--bg-color);padding:0.85rem 1rem;border-radius:10px;grid-column:1/-1;"><div style="font-size:0.72rem;color:var(--text-light);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:0.2rem;"><i class="fa-solid fa-location-dot"></i> Consultorio</div><div style="font-weight:500;font-size:0.88rem;">${d.office_address}</div></div>` : ''}
+          ${d.description ? `<div style="background:var(--bg-color);padding:0.85rem 1rem;border-radius:10px;grid-column:1/-1;"><div style="font-size:0.72rem;color:var(--text-light);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:0.2rem;"><i class="fa-solid fa-circle-info"></i> Acerca de</div><div style="font-size:0.88rem;line-height:1.5;">${d.description}</div></div>` : ''}
+        </div>
+      </div>
+
+      <div class="stats-row" style="grid-template-columns:repeat(3,1fr);">
+        <div class="stat-pill"><div class="stat-pill-icon" style="background:#dbeafe;color:#2563eb;"><i class="fa-solid fa-children"></i></div><div><div class="stat-pill-value">${docPatients.length}</div><div class="stat-pill-label">Total pacientes</div></div></div>
+        <div class="stat-pill"><div class="stat-pill-icon" style="background:#d1fae5;color:#059669;"><i class="fa-solid fa-circle-check"></i></div><div><div class="stat-pill-value">${activeCount}</div><div class="stat-pill-label">Activos</div></div></div>
+        <div class="stat-pill"><div class="stat-pill-icon" style="background:#f1f5f9;color:#475569;"><i class="fa-solid fa-pause"></i></div><div><div class="stat-pill-value">${docPatients.length - activeCount}</div><div class="stat-pill-label">Inactivos</div></div></div>
+      </div>
+
+      <div class="table-card">
+        <div class="table-toolbar"><h2 style="font-size:1.05rem;"><i class="fa-solid fa-user-group"></i> Pacientes asignados</h2></div>
+        <div style="overflow-x:auto;">
+          <table class="patients-table">
+            <thead><tr>
+              <th>Paciente</th>
+              <th>Edad</th>
+              <th>Tutor / Correo</th>
+              <th style="text-align:center;">Estado</th>
+              <th style="text-align:right;">Acciones</th>
+            </tr></thead>
+            <tbody>
+              ${docPatients.length ? docPatients.map(p => {
+                const age = calculateAgeString(p.birth_date || (p.onboarding_data && p.onboarding_data['Fecha de nacimiento']));
+                const isActive = p.active !== 0;
+                return `
+                <tr class="pt-row ${isActive ? '' : 'is-inactive'}" onclick="viewPatient(${p.id})">
+                  <td>
+                    <div style="display:flex;align-items:center;gap:0.6rem;">
+                      <div class="pt-avatar">${p.name.charAt(0).toUpperCase()}</div>
+                      <div><div style="font-weight:600;">${p.name}</div><div style="font-size:0.75rem;color:var(--text-light);">#${String(p.id).padStart(6,'0')}</div></div>
+                    </div>
+                  </td>
+                  <td style="font-size:0.85rem;">${age}</td>
+                  <td style="font-size:0.82rem;">${p.tutor_name ? `<div style="font-weight:500;">${p.tutor_name}</div><div style="color:var(--text-light);font-size:0.78rem;">${p.tutor_email||'—'}</div>` : '<span style="color:var(--text-light);font-style:italic;">Sin tutor</span>'}</td>
+                  <td style="text-align:center;"><span class="alert-pill" style="background:${isActive ? '#d1fae5' : '#f1f5f9'};color:${isActive ? '#065f46' : '#64748b'};">${isActive ? 'Activo' : 'Inactivo'}</span></td>
+                  <td style="text-align:right;">
+                    <button class="pt-action" onclick="event.stopPropagation();viewPatient(${p.id})" title="Ver expediente"><i class="fa-solid fa-eye"></i></button>
+                    ${!ro && p.tutor_id ? `<button class="pt-action" onclick="event.stopPropagation();openResetPasswordModal(${p.tutor_id})" title="Cambiar clave del tutor"><i class="fa-solid fa-key"></i></button>` : ''}
+                  </td>
+                </tr>`;
+              }).join('') : `<tr><td colspan="5" style="text-align:center;padding:2rem;color:var(--text-light);">Sin pacientes asignados.</td></tr>`}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>`;
+}
+
+// === Admin: Usuarios (super_admin) ===
+async function loadAllUsers() {
+  try { allUsers = await API.get('/users') || []; renderApp(); } catch(e) { console.error(e.message); }
+}
+function renderAdminUsers() {
+  if (!canManageUsers(currentUser.role)) {
+    return `<div class="dashboard-v2"><p style="text-align:center;padding:3rem;color:#ef4444;">Acceso denegado. Solo super_admin puede gestionar usuarios.</p></div>`;
+  }
+  const roleLabels = { super_admin:'Super Admin', admin:'Administrador', asesor:'Asesor', pediatra:'Pediatra', tutor:'Tutor' };
+  const roleColors = {
+    super_admin: { bg:'#fef3c7', color:'#92400e' },
+    admin:       { bg:'#dbeafe', color:'#1e40af' },
+    asesor:      { bg:'#e0e7ff', color:'#4338ca' },
+    pediatra:    { bg:'#d1fae5', color:'#065f46' },
+    tutor:       { bg:'#f1f5f9', color:'#475569' },
+  };
+  return `
+    <div class="dashboard-v2">
+      <div class="hero-banner">
+        <div>
+          <h1 style="font-size:1.75rem;margin-bottom:0.4rem;">Usuarios y Permisos</h1>
+          <p style="color:var(--text-light);">Administra los usuarios que tienen acceso a la plataforma</p>
+        </div>
+        <div class="hero-illustration"><i class="fa-solid fa-users-gear"></i></div>
+      </div>
+
+      <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:1rem 1.25rem;margin-bottom:1.25rem;font-size:0.85rem;line-height:1.6;">
+        <div style="display:flex;gap:1.5rem;flex-wrap:wrap;">
+          <div><span class="alert-pill" style="background:#fef3c7;color:#92400e;">Super Admin</span> acceso total, incluye gestión de usuarios</div>
+          <div><span class="alert-pill" style="background:#dbeafe;color:#1e40af;">Administrador</span> edita pediatras y pacientes</div>
+          <div><span class="alert-pill" style="background:#e0e7ff;color:#4338ca;">Asesor</span> solo lectura</div>
+        </div>
+      </div>
+
+      <div class="table-card">
+        <div class="table-toolbar">
+          <h2 style="font-size:1.05rem;">${allUsers.length} usuario${allUsers.length === 1 ? '' : 's'}</h2>
+          <button class="topbar-primary" onclick="openAddUserModal()"><i class="fa-solid fa-user-plus"></i> Añadir Usuario</button>
+        </div>
+        <div style="overflow-x:auto;">
+          <table class="patients-table">
+            <thead><tr>
+              <th>Usuario</th>
+              <th>Correo</th>
+              <th>Rol</th>
+              <th>Creado</th>
+              <th style="text-align:right;">Acciones</th>
+            </tr></thead>
+            <tbody>
+              ${allUsers.filter(u => u.role !== 'tutor').map(u => {
+                const rc = roleColors[u.role] || roleColors.tutor;
+                const isMe = u.id === currentUser.id;
+                return `
+                <tr class="pt-row">
+                  <td>
+                    <div style="display:flex;align-items:center;gap:0.6rem;">
+                      <div class="pt-avatar">${(u.name||'?').charAt(0).toUpperCase()}</div>
+                      <div style="font-weight:600;">${u.name}${isMe ? ' <span style="font-size:0.7rem;color:var(--text-light);font-weight:400;">(tú)</span>' : ''}</div>
+                    </div>
+                  </td>
+                  <td style="color:var(--text-light);font-size:0.85rem;">${u.email}</td>
+                  <td>
+                    <select onchange="changeUserRole(${u.id}, this.value, '${u.role}')" ${isMe ? 'disabled' : ''} style="padding:0.25rem 0.5rem;border:1px solid #e2e8f0;border-radius:6px;font-size:0.78rem;background:${rc.bg};color:${rc.color};font-weight:600;">
+                      <option value="super_admin" ${u.role==='super_admin'?'selected':''}>Super Admin</option>
+                      <option value="admin"       ${u.role==='admin'?'selected':''}>Administrador</option>
+                      <option value="asesor"      ${u.role==='asesor'?'selected':''}>Asesor</option>
+                      <option value="pediatra"    ${u.role==='pediatra'?'selected':''}>Pediatra</option>
+                    </select>
+                  </td>
+                  <td style="font-size:0.82rem;color:var(--text-light);">${u.created_at ? new Date(u.created_at).toLocaleDateString('es-MX') : '—'}</td>
+                  <td style="text-align:right;">
+                    <button class="pt-action" onclick="editUser(${u.id})" title="Editar" ${isMe ? '' : ''}><i class="fa-solid fa-pen"></i></button>
+                    <button class="pt-action" onclick="openResetPasswordForUser(${u.id}, '${u.name.replace(/'/g, "\\'")}')" title="Cambiar contraseña"><i class="fa-solid fa-key"></i></button>
+                    ${!isMe ? `<button class="pt-action" onclick="deleteUser(${u.id})" title="Eliminar" style="color:#ef4444;"><i class="fa-solid fa-trash"></i></button>` : ''}
+                  </td>
+                </tr>`;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>`;
+}
+
+window.changeUserRole = async function(userId, newRole, oldRole) {
+  if (newRole === oldRole) return;
+  if (!confirm(`¿Cambiar rol a "${newRole}"?`)) {
+    // Revertir el dropdown
+    renderApp();
+    return;
+  }
+  try {
+    await API.put(`/users/${userId}/role`, { role: newRole });
+    allUsers = (await API.get('/users')) || [];
+    pediatricians = (await API.get('/users/pediatras')) || [];
+    renderApp();
+  } catch(e) { alert('Error: '+e.message); renderApp(); }
+};
+
+window.openAddUserModal = function() {
+  window.editingUserId = null;
+  openModal('userModal');
+  // Tras abrirse, mostrar selector de rol si no está
+};
+
+window.openResetPasswordForUser = function(userId, name) {
+  // Reutilizamos el modal genérico de reset
+  window.resetPasswordTutorId = userId;
+  const inp = document.getElementById('resetPasswordInput');
+  const cb = document.getElementById('resetPasswordCustom');
+  if (cb) cb.checked = false;
+  if (inp) { inp.value = generateRandomPassword(8); inp.readOnly = true; inp.style.background = '#f1f5f9'; }
+  // Cambiar título dinámicamente
+  setTimeout(() => {
+    const h2 = document.querySelector('#resetPasswordModal .modal-header h2');
+    if (h2) h2.textContent = `Cambiar Contraseña de ${name}`;
+  }, 10);
+  openModal('resetPasswordModal');
+};
 
 function renderAdminDashboard() {
   const tutorCount = patients.filter(p => p.tutor_id).length;
@@ -310,15 +704,21 @@ function renderAdminDashboard() {
 // === Sidebar + Topbar shell (pediatra/admin) ===
 function renderSidebar() {
   const role = currentUser.role;
-  const items = role === 'admin' ? [
-    { id: 'admin-dashboard',  icon: 'fa-house',          label: 'Inicio' },
-    { id: 'admin-dashboard',  icon: 'fa-user-group',     label: 'Pacientes' },
-  ] : [
-    { id: 'doctor-home',          icon: 'fa-house',         label: 'Inicio' },
-    { id: 'doctor-dashboard',     icon: 'fa-user-group',    label: 'Pacientes' },
-    { id: 'availability-settings',icon: 'fa-calendar',      label: 'Calendario' },
-    { id: 'doctor-profile-edit',  icon: 'fa-id-card',       label: 'Mi Perfil' },
-  ];
+  let items;
+  if (isAdminLike(role)) {
+    items = [
+      { id: 'admin-home',      icon: 'fa-house',      label: 'Inicio' },
+      { id: 'admin-pediatras', icon: 'fa-user-doctor',label: 'Pediatras' },
+    ];
+    if (canManageUsers(role)) items.push({ id: 'admin-users', icon: 'fa-users-gear', label: 'Usuarios' });
+  } else {
+    items = [
+      { id: 'doctor-home',          icon: 'fa-house',         label: 'Inicio' },
+      { id: 'doctor-dashboard',     icon: 'fa-user-group',    label: 'Pacientes' },
+      { id: 'availability-settings',icon: 'fa-calendar',      label: 'Calendario' },
+      { id: 'doctor-profile-edit',  icon: 'fa-id-card',       label: 'Mi Perfil' },
+    ];
+  }
   const initials = (currentUser.name || '').split(' ').map(w => w[0]).slice(0,2).join('').toUpperCase();
   return `
     <aside class="sidebar">
@@ -340,7 +740,7 @@ function renderSidebar() {
           <div class="sidebar-user-avatar">${initials || 'U'}</div>
           <div style="overflow:hidden;">
             <div class="sidebar-user-name">${currentUser.name}</div>
-            <div class="sidebar-user-role">${role === 'admin' ? 'Administrador' : 'Pediatra'}</div>
+            <div class="sidebar-user-role">${({super_admin:'Super Admin',admin:'Administrador',asesor:'Asesor',pediatra:'Pediatra'})[role] || role}</div>
           </div>
         </div>
         <a href="#" class="sidebar-logout" onclick="event.preventDefault();handleLogout()">
@@ -352,17 +752,22 @@ function renderSidebar() {
 
 function renderTopbar() {
   const role = currentUser.role;
+  const placeholder = isAdminLike(role)
+    ? 'Buscar pediatra o paciente...'
+    : 'Buscar paciente por nombre...';
   return `
     <header class="topbar">
       <div class="topbar-search">
         <i class="fa-solid fa-magnifying-glass"></i>
-        <input type="text" id="topbarSearch" placeholder="Buscar paciente por nombre..." oninput="topbarFilterPatients(this.value)">
+        <input type="text" id="topbarSearch" placeholder="${placeholder}" oninput="topbarFilterPatients(this.value)">
       </div>
       <div class="topbar-actions">
         ${role === 'pediatra' ? `
           <button class="topbar-quick" onclick="navigate('availability-settings')"><i class="fa-regular fa-calendar"></i> Agendar cita</button>
         ` : ''}
-        <button class="topbar-primary" onclick="navigate('patient-onboarding')"><i class="fa-solid fa-plus"></i> Nuevo paciente</button>
+        ${canEdit(role) ? `
+          <button class="topbar-primary" onclick="navigate('patient-onboarding')"><i class="fa-solid fa-plus"></i> Nuevo paciente</button>
+        ` : (role === 'pediatra' ? `<button class="topbar-primary" onclick="navigate('patient-onboarding')"><i class="fa-solid fa-plus"></i> Nuevo paciente</button>` : '')}
       </div>
     </header>`;
 }
@@ -2332,8 +2737,23 @@ function renderModals() {
         <div class="modal-header"><h2 id="userModalTitle">Añadir Pediatra</h2><button class="close-btn" onclick="closeModal('userModal')"><i class="fa-solid fa-xmark"></i></button></div>
         <div class="form-group"><label>Nombre Completo</label><input type="text" id="userModalName" class="form-control" placeholder="Ej. Dra. Ana Gómez"></div>
         <div class="form-group"><label>Correo Electrónico</label><input type="email" id="userModalEmail" class="form-control" placeholder="ej. dra.ana@peditrack.com"></div>
-        <div class="form-group"><label>Contraseña</label><input type="text" id="userModalPassword" class="form-control" placeholder="Contraseña"></div>
-        <button class="btn btn-primary" style="width:100%;margin-top:1rem;" onclick="saveUser()">Guardar Pediatra</button>
+        ${canManageUsers(currentUser?.role || '') ? `
+        <div class="form-group" id="userModalRoleGroup"><label>Rol</label>
+          <select id="userModalRole" class="form-control">
+            <option value="pediatra">Pediatra</option>
+            <option value="admin">Administrador</option>
+            <option value="asesor">Asesor</option>
+            <option value="super_admin">Super Admin</option>
+          </select>
+        </div>` : ''}
+        <div class="form-group">
+          <label>Contraseña <small style="color:var(--text-light);font-weight:400;">(autogenerada — puedes editarla)</small></label>
+          <div style="display:flex;gap:0.5rem;">
+            <input type="text" id="userModalPassword" class="form-control" placeholder="Contraseña" style="font-family:monospace;">
+            <button class="btn btn-secondary" type="button" style="padding:0.5rem 0.85rem;" onclick="document.getElementById('userModalPassword').value=generateRandomPassword(8)" title="Generar otra"><i class="fa-solid fa-arrows-rotate"></i></button>
+          </div>
+        </div>
+        <button class="btn btn-primary" style="width:100%;margin-top:1rem;" onclick="saveUser()"><i class="fa-solid fa-floppy-disk"></i> Guardar</button>
       </div>
     </div>
 
@@ -3384,10 +3804,19 @@ window.openModal = function(id) {
     const ml = document.getElementById('medicationsList');
     if (ml && ml.children.length === 0) window.addMedicationField();
   }
+  if (id === 'userModal' && !window.editingUserId) {
+    // Autogenerar contraseña al abrir para crear nuevo usuario
+    const pw = document.getElementById('userModalPassword');
+    if (pw) pw.value = generateRandomPassword(8);
+  }
 };
 
 window.closeModal = function(id) {
   document.getElementById(id).classList.remove('active');
+  if (id === 'resetPasswordModal') {
+    const h2 = document.querySelector('#resetPasswordModal .modal-header h2');
+    if (h2) h2.textContent = 'Cambiar Contraseña del Tutor';
+  }
   if (id === 'addConsultModal') {
     window.editingConsultId = null; window.editingConsultIndex = null;
     ['consultWeight','consultHeight','consultHead','consultNotes'].forEach(i => { const el=document.getElementById(i); if(el) el.value=''; });
@@ -3610,6 +4039,8 @@ window.saveUser = async function() {
   const name = document.getElementById('userModalName').value;
   const email = document.getElementById('userModalEmail').value;
   const password = document.getElementById('userModalPassword').value;
+  const roleEl = document.getElementById('userModalRole');
+  const role = roleEl ? roleEl.value : 'pediatra';
   if (!name || !email) { alert('Nombre y correo son requeridos.'); return; }
   if (!window.editingUserId && !password) { alert('La contraseña es requerida.'); return; }
   try {
@@ -3617,9 +4048,12 @@ window.saveUser = async function() {
       const body = { name, email }; if (password) body.password = password;
       await API.put(`/users/${window.editingUserId}`, body);
     } else {
-      await API.post('/users', { name, email, password, role: 'pediatra' });
+      const generated = password;
+      await API.post('/users', { name, email, password, role });
+      if (generated) alert(`Usuario creado.\n\nCorreo: ${email}\nContraseña: ${generated}\n\nCompártela antes de cerrar este mensaje.`);
     }
     pediatricians = (await API.get('/users/pediatras')) || [];
+    if (canManageUsers(currentUser.role)) allUsers = (await API.get('/users')) || [];
     closeModal('userModal'); renderApp();
   } catch (e) { alert('Error: ' + e.message); }
 };

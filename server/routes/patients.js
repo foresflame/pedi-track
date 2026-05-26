@@ -30,8 +30,13 @@ function parsePatient(p) {
 // GET /api/patients
 router.get('/', (req, res) => {
   let rows;
-  if (req.user.role === 'admin') {
-    rows = db.prepare(`${WITH_DOCTOR} ORDER BY p.name`).all();
+  if (['admin','super_admin','asesor'].includes(req.user.role)) {
+    // Opcional: filtrar por doctor_id (admin viendo un pediatra específico)
+    if (req.query.doctor_id) {
+      rows = db.prepare(`${WITH_DOCTOR} WHERE p.doctor_id = ? ORDER BY p.name`).all(parseInt(req.query.doctor_id));
+    } else {
+      rows = db.prepare(`${WITH_DOCTOR} ORDER BY p.name`).all();
+    }
   } else if (req.user.role === 'pediatra') {
     rows = db.prepare(`${WITH_DOCTOR} WHERE p.doctor_id = ? ORDER BY p.name`).all(req.user.id);
   } else {
