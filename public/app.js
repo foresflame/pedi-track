@@ -1890,13 +1890,18 @@ function renderOnboardingSuccess() {
   `;
 }
 
-// === Doctor Profile (own edit + public view) ===
+// === Doctor Profile (own edit + admin edit + public view) ===
 let myProfile = null;
 let publicDoctor = null;
 
 async function loadOwnProfile() {
   try {
-    myProfile = await API.get('/users/me');
+    // Si admin/super_admin está editando un pediatra ajeno, cargar por ID
+    if (window.editingProfileUserId) {
+      myProfile = await API.get(`/users/${window.editingProfileUserId}`);
+    } else {
+      myProfile = await API.get('/users/me');
+    }
     fillProfileForm();
   } catch(e) { console.error('loadOwnProfile:', e.message); }
 }
@@ -1920,14 +1925,18 @@ function fillProfileForm() {
 }
 
 function renderDoctorProfileEdit() {
+  const isAdminEditing = !!window.editingProfileUserId && window.editingProfileUserId !== currentUser.id;
+  const title    = isAdminEditing ? `Editar Pediatra: ${myProfile?.name || ''}` : 'Mi Perfil Profesional';
+  const subtitle = isAdminEditing ? 'Edita los datos profesionales del pediatra.' : 'Esta información será visible para los tutores de tus pacientes.';
+  const backView = isAdminEditing ? 'admin-pediatra-detail' : 'doctor-dashboard';
   return `
     <div class="dashboard">
       <div class="dashboard-header">
         <div>
-          <h1 style="font-size:2rem;">Mi Perfil Profesional</h1>
-          <p style="color:var(--text-light);">Esta información será visible para los tutores de tus pacientes.</p>
+          <h1 style="font-size:2rem;">${title}</h1>
+          <p style="color:var(--text-light);">${subtitle}</p>
         </div>
-        <button class="btn btn-secondary" onclick="navigate('doctor-dashboard')"><i class="fa-solid fa-arrow-left"></i> Volver</button>
+        <button class="btn btn-secondary" onclick="navigate('${backView}')"><i class="fa-solid fa-arrow-left"></i> Volver</button>
       </div>
 
       <div style="display:grid;grid-template-columns:280px 1fr;gap:2rem;background:white;padding:2rem;border-radius:15px;box-shadow:var(--card-shadow);">
@@ -2021,11 +2030,25 @@ window.saveOwnProfile = async function() {
   if (password) body.password = password;
   if (!body.name || !body.email) { alert('Nombre y correo son obligatorios'); return; }
   try {
-    const updated = await API.put('/users/me', body);
+    const targetId  = window.editingProfileUserId;
+    const isAdminEditing = !!targetId && targetId !== currentUser.id;
+    const updated   = isAdminEditing
+      ? await API.put(`/users/${targetId}`, body)
+      : await API.put('/users/me', body);
     myProfile = updated;
-    // Actualizar nombre del usuario en sesión por si cambió
-    if (currentUser) { currentUser.name = updated.name; currentUser.email = updated.email; sessionStorage.setItem('peditrack_user', JSON.stringify(currentUser)); }
+    if (!isAdminEditing && currentUser) {
+      currentUser.name = updated.name; currentUser.email = updated.email;
+      sessionStorage.setItem('peditrack_user', JSON.stringify(currentUser));
+    }
     alert('Perfil actualizado correctamente');
+    if (isAdminEditing) {
+      // Refrescar lista de pediatras y volver al detalle
+      pediatricians = (await API.get('/users/pediatras')) || [];
+      viewingPediatraData = null; // forzar recarga del detalle
+      window.editingProfileUserId = null;
+      navigate('admin-pediatra-detail');
+      return;
+    }
     navigate('doctor-dashboard');
   } catch(e) { alert('Error: ' + e.message); }
 };
@@ -3836,6 +3859,11 @@ window.openModal = function(id) {
     const ml = document.getElementById('medicationsList');
     if (ml && ml.children.length === 0) window.addMedicationField();
   }
+  if (id === 'userModal' && window.editingUserId) {
+    // Editar: ocultar selector de rol (se cambia desde la tabla)
+    const rg = document.getElementById('userModalRoleGroup');
+    if (rg) rg.style.display = 'none';
+  }
   if (id === 'userModal' && !window.editingUserId) {
     // Autogenerar contraseña al abrir para crear nuevo usuario
     const pw = document.getElementById('userModalPassword');
@@ -4112,9 +4140,23 @@ window.saveUser = async function() {
 };
 
 window.editUser = function(id) {
-  const u = pediatricians.find(u => u.id === id); if (!u) return;
+  // Buscar primero en pediatras, luego en lista completa de usuarios
+  const u = pediatricians.find(u => u.id === id) || allUsers.find(u => u.id === id);
+  if (!u) return;
+
+  // Para pediatras navegamos al editor completo (con foto, especialidad, etc.)
+  if (u.role === 'pediatra' && isAdminLike(currentUser.role)) {
+    window.editingProfileUserId = id;
+    myProfile = null; // forzar recarga
+    navigate('doctor-profile-edit');
+    return;
+  }
+
+  // Para admin/asesor/super_admin usamos el modal pequeño
   window.editingUserId = id;
-  const t = document.getElementById('userModalTitle'); if(t) t.innerText = 'Editar Pediatra';
+  window.userModalContext = u.role === 'pediatra' ? 'pediatra' : 'admin';
+  const t = document.getElementById('userModalTitle');
+  if (t) t.innerText = u.role === 'pediatra' ? 'Editar Pediatra' : 'Editar Usuario';
   document.getElementById('userModalName').value  = u.name;
   document.getElementById('userModalEmail').value = u.email;
   document.getElementById('userModalPassword').value = '';

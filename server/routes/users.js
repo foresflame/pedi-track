@@ -135,10 +135,20 @@ router.put('/:id', requireRole('admin'), (req, res) => {
     if (dup) return res.status(409).json({ error: 'Ya existe un usuario con ese email' });
   }
 
-  db.prepare('UPDATE users SET name = ?, email = ?, password = ? WHERE id = ?')
-    .run(newName, newEmail, newPass, id);
+  // Construir SET dinámico incluyendo campos de perfil que vengan en el body
+  const setParts = ['name = ?', 'email = ?', 'password = ?'];
+  const values   = [newName, newEmail, newPass];
+  for (const f of PROFILE_FIELDS) {
+    if (req.body[f] !== undefined) {
+      setParts.push(`${f} = ?`);
+      values.push(req.body[f] || null);
+    }
+  }
+  values.push(id);
+  db.prepare(`UPDATE users SET ${setParts.join(', ')} WHERE id = ?`).run(...values);
 
-  res.json({ id, name: newName, email: newEmail, role: user.role });
+  const updated = db.prepare(`SELECT ${SAFE_FIELDS} FROM users WHERE id = ?`).get(id);
+  res.json(updated);
 });
 
 // PUT /api/users/:id/role — cambiar rol (solo super_admin)
