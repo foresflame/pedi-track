@@ -39,7 +39,7 @@ CREATE TABLE IF NOT EXISTS consultations (
   patient_id  INTEGER NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
   doctor_id   INTEGER REFERENCES users(id) ON DELETE SET NULL,
   date        TEXT    NOT NULL,
-  type        TEXT    DEFAULT 'Control de niÃ±o sano',
+  type        TEXT    DEFAULT 'Control de niño sano',
   weight      REAL,
   height      REAL,
   head_circ   REAL,
@@ -78,18 +78,18 @@ function seedDefaultUsers() {
   const insert = db.prepare('INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)');
   const seed = db.transaction(() => {
     insert.run('Administrador Principal', 'admin@peditrack.com', bcrypt.hashSync('Admin2024!', 10), 'admin');
-    insert.run('Dr. Roberto PediÃ¡trico', 'doc@peditrack.com', bcrypt.hashSync('Doc2024!', 10), 'pediatra');
+    insert.run('Dr. Roberto Pediátrico', 'doc@peditrack.com', bcrypt.hashSync('Doc2024!', 10), 'pediatra');
     insert.run('Padre/Madre de Prueba', 'tutor@peditrack.com', bcrypt.hashSync('Tutor2024!', 10), 'tutor');
   });
   seed();
-  console.log('âœ“ Usuarios de prueba creados (admin, pediatra, tutor)');
+  console.log('✓ Usuarios de prueba creados (admin, pediatra, tutor)');
 }
 
 function runMigrations() {
-  // Fase F: prÃ³xima visita sugerida en consultas
+  // Fase F: próxima visita sugerida en consultas
   try { db.prepare('ALTER TABLE consultations ADD COLUMN next_visit_date TEXT').run(); } catch (e) {}
 
-  // Fase A: historia clÃ­nica estructurada en patients
+  // Fase A: historia clínica estructurada en patients
   const phaseACols = [
     'ALTER TABLE patients ADD COLUMN birth_state       TEXT',
     'ALTER TABLE patients ADD COLUMN birth_city        TEXT',
@@ -255,6 +255,23 @@ function runMigrations() {
     db.prepare("UPDATE users SET role = 'super_admin' WHERE email = 'admin@peditrack.com' AND role = 'admin'").run();
   } catch(e) {}
 
+  // Limpieza de nombres con UTF-8 corrupto en datos antiguos (mojibake → UTF-8 correcto)
+  try {
+    const mojibakeFixes = [
+      ['Ã±', 'ñ'], ['Ã³', 'ó'], ['Ã©', 'é'], ['Ã¡', 'á'], ['Ã­', 'í'], ['Ãº', 'ú'],
+      ['Ã‘', 'Ñ'], ['Ã“', 'Ó'], ['Ã‰', 'É'],
+    ];
+    const usersToFix = db.prepare("SELECT id, name FROM users WHERE name LIKE '%Ã%'").all();
+    for (const u of usersToFix) {
+      let newName = u.name;
+      for (const [bad, good] of mojibakeFixes) newName = newName.split(bad).join(good);
+      if (newName !== u.name) {
+        db.prepare('UPDATE users SET name = ? WHERE id = ?').run(newName, u.id);
+      }
+    }
+    if (usersToFix.length) console.log(`✓ Corrupción UTF-8 limpiada en ${usersToFix.length} usuario(s)`);
+  } catch(e) {}
+
   // Perfil extendido del pediatra
   const userProfileCols = [
     'ALTER TABLE users ADD COLUMN specialty       TEXT',
@@ -279,7 +296,7 @@ function initDB() {
   db.exec(SCHEMA);
   runMigrations();
   seedDefaultUsers();
-  console.log('âœ“ Base de datos inicializada');
+  console.log('✓ Base de datos inicializada');
 }
 
 module.exports = { db, initDB };

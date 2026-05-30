@@ -12,15 +12,15 @@ function parseConsult(c) {
 }
 
 /**
- * EvalÃºa signos vitales segÃºn la edad del paciente y retorna alertas.
- * @param {number} ageMonths  â€” edad en meses
- * @param {object} v          â€” { heart_rate, resp_rate, temperature, spo2, bp_systolic, bp_diastolic }
+ * Evalúa signos vitales según la edad del paciente y retorna alertas.
+ * @param {number} ageMonths  — edad en meses
+ * @param {object} v          — { heart_rate, resp_rate, temperature, spo2, bp_systolic, bp_diastolic }
  * @returns {object}  { alerts: [{sign, value, level, msg}] }
  */
 function getVitalAlerts(ageMonths, v) {
   const alerts = [];
 
-  // â”€â”€ FC (Frecuencia CardÃ­aca) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── FC (Frecuencia Cardíaca) ────────────────────────────────────────
   if (v.heart_rate != null) {
     let [lo, hi] = ageMonths < 1 ? [100,180] : ageMonths < 12 ? [100,160] :
                    ageMonths < 24 ? [90,150] : ageMonths < 60 ? [80,140] :
@@ -29,11 +29,11 @@ function getVitalAlerts(ageMonths, v) {
       alerts.push({ sign:'FC', value: v.heart_rate, unit:'lpm',
         level: v.heart_rate < lo * 0.85 || v.heart_rate > hi * 1.15 ? 'danger' : 'warning',
         msg: v.heart_rate < lo ? 'Bradicardia' : 'Taquicardia',
-        normal: `${lo}â€“${hi} lpm` });
+        normal: `${lo}–${hi} lpm` });
     }
   }
 
-  // â”€â”€ FR (Frecuencia Respiratoria) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── FR (Frecuencia Respiratoria) ───────────────────────────────────
   if (v.resp_rate != null) {
     let [lo, hi] = ageMonths < 2 ? [30,60] : ageMonths < 12 ? [25,50] :
                    ageMonths < 60 ? [20,40] : [15,30];
@@ -41,22 +41,22 @@ function getVitalAlerts(ageMonths, v) {
       alerts.push({ sign:'FR', value: v.resp_rate, unit:'rpm',
         level: v.resp_rate < lo * 0.8 || v.resp_rate > hi * 1.2 ? 'danger' : 'warning',
         msg: v.resp_rate < lo ? 'Bradipnea' : 'Taquipnea',
-        normal: `${lo}â€“${hi} rpm` });
+        normal: `${lo}–${hi} rpm` });
     }
   }
 
-  // â”€â”€ Temperatura â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Temperatura ────────────────────────────────────────────────────
   if (v.temperature != null) {
     if (v.temperature < 36.0) {
-      alerts.push({ sign:'Temp', value: v.temperature, unit:'Â°C', level:'danger', msg:'Hipotermia', normal:'36.0â€“37.5 Â°C' });
+      alerts.push({ sign:'Temp', value: v.temperature, unit:'°C', level:'danger', msg:'Hipotermia', normal:'36.0–37.5 °C' });
     } else if (v.temperature >= 38.5) {
-      alerts.push({ sign:'Temp', value: v.temperature, unit:'Â°C', level:'danger', msg:'Fiebre alta', normal:'36.0â€“37.5 Â°C' });
+      alerts.push({ sign:'Temp', value: v.temperature, unit:'°C', level:'danger', msg:'Fiebre alta', normal:'36.0–37.5 °C' });
     } else if (v.temperature >= 37.6) {
-      alerts.push({ sign:'Temp', value: v.temperature, unit:'Â°C', level:'warning', msg:'FebrÃ­cula', normal:'36.0â€“37.5 Â°C' });
+      alerts.push({ sign:'Temp', value: v.temperature, unit:'°C', level:'warning', msg:'Febrícula', normal:'36.0–37.5 °C' });
     }
   }
 
-  // â”€â”€ SpO2 â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── SpO2 ───────────────────────────────────────────────────────────
   if (v.spo2 != null) {
     if (v.spo2 < 90) {
       alerts.push({ sign:'SpOâ‚‚', value: v.spo2, unit:'%', level:'danger', msg:'Hipoxemia severa', normal:'â‰¥95 %' });
@@ -65,15 +65,15 @@ function getVitalAlerts(ageMonths, v) {
     }
   }
 
-  // â”€â”€ TA SistÃ³lica â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── TA Sistólica ───────────────────────────────────────────────────
   if (v.bp_systolic != null) {
     let [lo, hi] = ageMonths < 12 ? [65,100] : ageMonths < 36 ? [70,110] :
                    ageMonths < 60 ? [75,115] : ageMonths < 120 ? [80,120] : [90,130];
     if (v.bp_systolic < lo || v.bp_systolic > hi) {
       alerts.push({ sign:'TAS', value: v.bp_systolic, unit:'mmHg',
         level: v.bp_systolic > hi + 10 || v.bp_systolic < lo - 10 ? 'danger' : 'warning',
-        msg: v.bp_systolic < lo ? 'HipotensiÃ³n' : 'HipertensiÃ³n',
-        normal: `${lo}â€“${hi} mmHg` });
+        msg: v.bp_systolic < lo ? 'Hipotensión' : 'Hipertensión',
+        normal: `${lo}–${hi} mmHg` });
     }
   }
 
@@ -81,10 +81,10 @@ function getVitalAlerts(ageMonths, v) {
 }
 
 /**
- * Calcula la fecha sugerida de prÃ³xima visita segÃºn la edad del paciente.
+ * Calcula la fecha sugerida de próxima visita según la edad del paciente.
  * Frecuencia basada en lineamientos AAP / NOM-031.
- * @param {string} birthDateStr  â€” 'YYYY-MM-DD'
- * @param {string} [consultDateStr] â€” 'YYYY-MM-DD' (default: hoy)
+ * @param {string} birthDateStr  — 'YYYY-MM-DD'
+ * @param {string} [consultDateStr] — 'YYYY-MM-DD' (default: hoy)
  * @returns {string|null} 'YYYY-MM-DD'
  */
 function suggestNextVisit(birthDateStr, consultDateStr) {
@@ -96,12 +96,12 @@ function suggestNextVisit(birthDateStr, consultDateStr) {
   const ageInDays = Math.floor((consult - birth) / 86_400_000);
 
   let daysToAdd;
-  if      (ageInDays <  61)  daysToAdd = 14;   // < 2 meses  â†’ 2 semanas
-  else if (ageInDays < 184)  daysToAdd = 30;   // 2-6 meses  â†’ 1 mes
-  else if (ageInDays < 366)  daysToAdd = 60;   // 6-12 meses â†’ 2 meses
-  else if (ageInDays < 731)  daysToAdd = 90;   // 1-2 aÃ±os   â†’ 3 meses
-  else if (ageInDays < 1826) daysToAdd = 180;  // 2-5 aÃ±os   â†’ 6 meses
-  else                       daysToAdd = 365;  // 5+ aÃ±os    â†’ 12 meses
+  if      (ageInDays <  61)  daysToAdd = 14;   // < 2 meses  → 2 semanas
+  else if (ageInDays < 184)  daysToAdd = 30;   // 2-6 meses  → 1 mes
+  else if (ageInDays < 366)  daysToAdd = 60;   // 6-12 meses → 2 meses
+  else if (ageInDays < 731)  daysToAdd = 90;   // 1-2 años   → 3 meses
+  else if (ageInDays < 1826) daysToAdd = 180;  // 2-5 años   → 6 meses
+  else                       daysToAdd = 365;  // 5+ años    → 12 meses
 
   const next = new Date(consult);
   next.setDate(next.getDate() + daysToAdd);
@@ -163,7 +163,7 @@ router.post('/', requireRole('admin', 'pediatra'), (req, res) => {
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     patientId, req.user.id, dateStr,
-    type || 'Control de niÃ±o sano',
+    type || 'Control de niño sano',
     parseFloat(weight), parseFloat(height),
     head_circ ? parseFloat(head_circ) : null,
     notes || '',
@@ -173,7 +173,7 @@ router.post('/', requireRole('admin', 'pediatra'), (req, res) => {
     vitalsPayload.spo2, vitalsPayload.bp_systolic, vitalsPayload.bp_diastolic
   );
 
-  // Actualizar peso y talla del paciente con la consulta mÃ¡s reciente
+  // Actualizar peso y talla del paciente con la consulta más reciente
   db.prepare('UPDATE patients SET weight = ?, height = ? WHERE id = ?')
     .run(parseFloat(weight), parseFloat(height), patientId);
 
