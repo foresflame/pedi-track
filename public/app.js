@@ -708,6 +708,20 @@ function renderAdminDashboard() {
 // === Sidebar + Topbar shell (pediatra/admin) ===
 function renderSidebar() {
   const role = currentUser.role;
+  // Cierra sidebar móvil al navegar
+  window.closeMobileSidebar = function() {
+    const sb = document.querySelector('.sidebar');
+    const bd = document.querySelector('.sidebar-backdrop');
+    if (sb) sb.classList.remove('is-open');
+    if (bd) bd.classList.remove('is-visible');
+  };
+  window.toggleMobileSidebar = function() {
+    const sb = document.querySelector('.sidebar');
+    const bd = document.querySelector('.sidebar-backdrop');
+    if (!sb) return;
+    sb.classList.toggle('is-open');
+    if (bd) bd.classList.toggle('is-visible');
+  };
   let items;
   if (isAdminLike(role)) {
     items = [
@@ -735,7 +749,7 @@ function renderSidebar() {
       </div>
       <nav class="sidebar-nav">
         ${items.map(it => `
-          <a href="#" class="sidebar-link ${currentView === it.id ? 'is-active' : ''}" onclick="event.preventDefault();navigate('${it.id}')">
+          <a href="#" class="sidebar-link ${currentView === it.id ? 'is-active' : ''}" onclick="event.preventDefault();closeMobileSidebar();navigate('${it.id}')">
             <i class="fa-solid ${it.icon}"></i> <span>${it.label}</span>
           </a>`).join('')}
       </nav>
@@ -759,21 +773,30 @@ function renderTopbar() {
   const placeholder = isAdminLike(role)
     ? 'Buscar pediatra o paciente...'
     : 'Buscar paciente por nombre...';
+  const canAddPatient = canEdit(role) || role === 'pediatra';
   return `
     <header class="topbar">
+      <button class="topbar-hamburger" onclick="toggleMobileSidebar()" aria-label="Menú">
+        <i class="fa-solid fa-bars"></i>
+      </button>
+      <div class="topbar-mobile-brand">
+        <i class="fa-solid fa-baby-carriage" style="color:var(--primary);"></i>
+        <strong>PediTrack</strong>
+      </div>
       <div class="topbar-search">
         <i class="fa-solid fa-magnifying-glass"></i>
         <input type="text" id="topbarSearch" placeholder="${placeholder}" oninput="topbarFilterPatients(this.value)">
       </div>
       <div class="topbar-actions">
         ${role === 'pediatra' ? `
-          <button class="topbar-quick" onclick="navigate('availability-settings')"><i class="fa-regular fa-calendar"></i> Agendar cita</button>
+          <button class="topbar-quick" onclick="navigate('availability-settings')"><i class="fa-regular fa-calendar"></i> <span class="hide-on-mobile">Agendar cita</span></button>
         ` : ''}
-        ${canEdit(role) ? `
-          <button class="topbar-primary" onclick="navigate('patient-onboarding')"><i class="fa-solid fa-plus"></i> Nuevo paciente</button>
-        ` : (role === 'pediatra' ? `<button class="topbar-primary" onclick="navigate('patient-onboarding')"><i class="fa-solid fa-plus"></i> Nuevo paciente</button>` : '')}
+        ${canAddPatient ? `
+          <button class="topbar-primary" onclick="navigate('patient-onboarding')"><i class="fa-solid fa-plus"></i> <span class="hide-on-mobile">Nuevo paciente</span></button>
+        ` : ''}
       </div>
-    </header>`;
+    </header>
+    <div class="sidebar-backdrop" onclick="closeMobileSidebar()"></div>`;
 }
 
 window.togglePatientActive = async function(patientId, active) {
@@ -798,7 +821,10 @@ window.setPatientFilter = function(mode) {
 
 function renderDoctorHome() {
   const today = new Date().toISOString().slice(0, 10);
-  const firstName = (currentUser.name || '').split(' ')[0] || 'Doctor';
+  const firstName = (() => {
+    const parts = (currentUser.name || '').split(' ').filter(p => p && !/^(dr\.?|dra\.?|md)$/i.test(p));
+    return parts[0] || 'Doctor';
+  })();
   const dateLabel = new Date().toLocaleDateString('es-MX', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
 
   // Citas de hoy (excluye canceladas)
