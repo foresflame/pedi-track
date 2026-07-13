@@ -289,6 +289,21 @@ function runMigrations() {
     try { db.prepare(sql).run(); } catch (e) {}
   }
 
+  // Fotos guardadas como base64 en la DB → archivos en disco (ruta /uploads/...)
+  try {
+    const { persistPhoto } = require('./services/photoStorage');
+    const withInlinePhoto = db.prepare("SELECT id FROM users WHERE photo LIKE 'data:%'").all();
+    for (const u of withInlinePhoto) {
+      const photo = db.prepare('SELECT photo FROM users WHERE id = ?').get(u.id).photo;
+      try {
+        db.prepare('UPDATE users SET photo = ? WHERE id = ?').run(persistPhoto(u.id, photo), u.id);
+      } catch (e) {
+        console.warn(`⚠ No se pudo migrar la foto del usuario ${u.id}: ${e.message}`);
+      }
+    }
+    if (withInlinePhoto.length) console.log(`✓ ${withInlinePhoto.length} foto(s) migradas de base64 a disco`);
+  } catch(e) {}
+
   console.log('✔ Migraciones ejecutadas');
 }
 

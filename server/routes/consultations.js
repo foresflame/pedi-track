@@ -135,7 +135,8 @@ router.post('/', requireRole('admin', 'pediatra'), (req, res) => {
   if (!weight || !height) return res.status(400).json({ error: 'Peso y estatura son requeridos' });
 
   const todayIso = new Date().toISOString().slice(0, 10);
-  const dateStr  = date || new Date().toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' });
+  // Siempre ISO (YYYY-MM-DD); el frontend la formatea para mostrar
+  const dateStr  = date || todayIso;
   const nextVisit = suggestNextVisit(patient.birth_date, todayIso);
 
   // Calcular alertas de signos vitales

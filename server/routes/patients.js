@@ -1,5 +1,6 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 const { db } = require('../database');
 const { requireAuth } = require('../middleware/auth');
 const { requireRole } = require('../middleware/roles');
@@ -95,7 +96,8 @@ router.post('/', requireRole('admin', 'pediatra'), (req, res) => {
     if (existing) {
       tutor_id = existing.id;
     } else {
-      generatedPassword = Math.random().toString(36).slice(-8) + Math.floor(Math.random() * 100);
+      const ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+      generatedPassword = Array.from(crypto.randomBytes(9), b => ALPHABET[b % ALPHABET.length]).join('');
       const tutorResult = db.prepare(
         'INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)'
       ).run(

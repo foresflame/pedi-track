@@ -7,6 +7,14 @@ const { sendPrescriptionEmail } = require('../services/emailService');
 const router = express.Router();
 router.use(requireAuth);
 
+// Fechas ISO → formato largo es-MX; strings antiguos ya formateados pasan intactos
+function formatConsultDate(dateStr) {
+  if (!dateStr) return '';
+  if (!/^\d{4}-\d{2}-\d{2}/.test(dateStr)) return dateStr;
+  const [y, m, d] = dateStr.slice(0, 10).split('-').map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' });
+}
+
 function calculateAgeString(birthDateStr) {
   if (!birthDateStr) return 'Desconocida';
   const [y, m, d] = birthDateStr.split('-').map(Number);
@@ -56,7 +64,7 @@ router.post('/prescription', requireRole('admin', 'pediatra'), async (req, res) 
       to:          recipientEmail,
       patientName: consult.patient_name,
       doctorName:  consult.doctor_name,
-      consultDate: consult.date,
+      consultDate: formatConsultDate(consult.date),
       medications,
       patientAge:  calculateAgeString(consult.birth_date),
       weight:      consult.weight,

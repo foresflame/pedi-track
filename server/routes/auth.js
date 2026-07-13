@@ -1,6 +1,8 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
+const rateLimit = require('express-rate-limit');
 const { db } = require('../database');
 const { requireAuth } = require('../middleware/auth');
 const { requireRole } = require('../middleware/roles');
@@ -8,8 +10,36 @@ const { sendPasswordResetEmail } = require('../services/emailService');
 
 const router = express.Router();
 
+// Protección contra fuerza bruta / abuso
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
+  skipSuccessfulRequests: true, // solo cuentan los intentos fallidos
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Demasiados intentos de inicio de sesión. Intenta de nuevo en 15 minutos.' },
+});
+const forgotLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Demasiadas solicitudes de recuperación. Intenta de nuevo en una hora.' },
+});
+
+const TOKEN_MAX_AGE_MS = 8 * 60 * 60 * 1000; // igual que expiresIn del JWT
+
+function setAuthCookie(req, res, token) {
+  res.cookie('peditrack_token', token, {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: req.secure, // true detrás del proxy TLS de fly.io, false en localhost
+    maxAge: TOKEN_MAX_AGE_MS,
+  });
+}
+
 // POST /api/auth/login
-router.post('/login', (req, res) => {
+router.post('/login', loginLimiter, (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) {
     return res.status(400).json({ error: 'Email y contraseña son requeridos' });
@@ -26,10 +56,18 @@ router.post('/login', (req, res) => {
     { expiresIn: '8h' }
   );
 
+  setAuthCookie(req, res, token);
   res.json({
+    // token también en el body por compatibilidad con clientes que aún lo guardan
     token,
     user: { id: user.id, name: user.name, role: user.role, email: user.email }
   });
+});
+
+// POST /api/auth/logout — limpia la cookie de sesión
+router.post('/logout', (req, res) => {
+  res.clearCookie('peditrack_token', { httpOnly: true, sameSite: 'lax' });
+  res.json({ message: 'Sesión cerrada' });
 });
 
 // POST /api/auth/change-password — cambia su propia contraseña
@@ -81,7 +119,7 @@ router.post('/reset-password/:userId', requireAuth, requireRole('admin', 'pediat
 });
 
 // POST /api/auth/forgot-password — genera contraseña temporal y la envía por correo
-router.post('/forgot-password', (req, res) => {
+router.post('/forgot-password', forgotLimiter, (req, res) => {
   const { email } = req.body;
   if (!email) return res.status(400).json({ error: 'El correo es requerido' });
 
@@ -92,8 +130,9 @@ router.post('/forgot-password', (req, res) => {
     return res.json({ message: 'Si ese correo existe en el sistema, recibirás las instrucciones.' });
   }
 
-  const tempPassword = Math.random().toString(36).slice(-6).toUpperCase() +
-                       Math.floor(Math.random() * 900 + 100);
+  // 9 caracteres alfanuméricos de CSPRNG (sin ambiguos O/0/I/l)
+  const ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+  const tempPassword = Array.from(crypto.randomBytes(9), b => ALPHABET[b % ALPHABET.length]).join('');
 
   db.prepare('UPDATE users SET password = ? WHERE id = ?')
     .run(bcrypt.hashSync(tempPassword, 10), user.id);

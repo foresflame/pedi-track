@@ -2,6 +2,8 @@
 const API = {
   baseUrl: '/api',
   getHeaders() {
+    // La sesión viaja en una cookie httpOnly; el header Bearer queda solo como
+    // compatibilidad con sesiones abiertas antes del cambio.
     const token = sessionStorage.getItem('peditrack_token');
     return { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) };
   },
@@ -59,9 +61,10 @@ function canManageUsers(role) { return role === 'super_admin'; }
 
 // === Bootstrap & Data Loading ===
 async function bootstrap() {
-  const token  = sessionStorage.getItem('peditrack_token');
+  // El token vive en una cookie httpOnly; aquí solo se necesita el usuario.
+  // Si la cookie expiró, el primer request devolverá 401 y hará logout.
   const stored = sessionStorage.getItem('peditrack_user');
-  if (!token || !stored) { currentView = 'login'; renderApp(); return; }
+  if (!stored) { currentView = 'login'; renderApp(); return; }
   try { currentUser = JSON.parse(stored); } catch { currentUser = null; }
   if (!currentUser) { sessionStorage.clear(); currentView = 'login'; renderApp(); return; }
   currentView = getRoleDefaultView(currentUser.role);
@@ -1246,7 +1249,7 @@ function renderParentProfile() {
         if (h.medications && h.medications.length > 0) meds = meds.concat(h.medications);
         return `
         <div class="timeline-item">
-          <div class="timeline-date">${h.date}</div>
+          <div class="timeline-date">${formatConsultDate(h.date)}</div>
           <div class="timeline-content">
             <div style="display:flex;justify-content:space-between;align-items:flex-start;">
               <h4>${h.type || 'Consulta de Seguimiento'}</h4>
@@ -3530,6 +3533,15 @@ function renderOnboarding() {
 }
 
 // === Helpers ===
+// Fecha de consulta: ISO (YYYY-MM-DD) → "13 de julio de 2026".
+// Consultas antiguas ya guardadas como texto formateado pasan intactas.
+function formatConsultDate(dateStr) {
+  if (!dateStr) return '';
+  if (!/^\d{4}-\d{2}-\d{2}/.test(dateStr)) return dateStr;
+  const [y, m, d] = dateStr.slice(0, 10).split('-').map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' });
+}
+
 function calculateAgeString(birthDateStr) {
   if (!birthDateStr) return 'Edad desconocida';
   const [y, m, d] = birthDateStr.split('-').map(Number);
@@ -3861,7 +3873,7 @@ window.handleLogin = async function() {
   try {
     const data = await API.post('/auth/login', { email, password: pass });
     if (!data) return;
-    sessionStorage.setItem('peditrack_token', data.token);
+    // El token queda en una cookie httpOnly puesta por el server (inaccesible a JS)
     sessionStorage.setItem('peditrack_user', JSON.stringify(data.user));
     currentUser = data.user;
     currentView = getRoleDefaultView(currentUser.role);
@@ -3873,6 +3885,9 @@ window.handleLogin = async function() {
 };
 
 window.handleLogout = function() {
+  // Limpia la cookie httpOnly en el server (fire-and-forget: el estado local
+  // se limpia igual aunque el request falle)
+  fetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
   currentUser = null; patients = []; pediatricians = []; currentPatient = null;
   consultations = []; todayAppointments = []; doctorAppointments = []; currentPatientId = null;
   sessionStorage.clear(); currentView = 'login'; renderApp();
@@ -4113,7 +4128,7 @@ window.printPrescription = function(idx) {
   </head><body>
     <div class="header"><h1>${doctorName}</h1><p style="color:#64748b;font-size:14px;margin:5px 0 0;">Especialista en Pediatría</p></div>
     <div class="patient-info">
-      <div><strong>Paciente:</strong> ${p.name}</div><div><strong>Fecha:</strong> ${h.date}</div>
+      <div><strong>Paciente:</strong> ${p.name}</div><div><strong>Fecha:</strong> ${formatConsultDate(h.date)}</div>
       <div><strong>Edad:</strong> ${ageStr}</div><div><strong>Peso:</strong> ${h.weight} kg | <strong>Talla:</strong> ${h.height} cm</div>
     </div>
     <div class="rx">Rx</div>

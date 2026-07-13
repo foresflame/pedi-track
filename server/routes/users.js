@@ -3,6 +3,7 @@ const bcrypt = require('bcryptjs');
 const { db } = require('../database');
 const { requireAuth } = require('../middleware/auth');
 const { requireRole } = require('../middleware/roles');
+const { persistPhoto } = require('../services/photoStorage');
 
 const router = express.Router();
 router.use(requireAuth);
@@ -45,8 +46,14 @@ router.put('/me', requireRole('pediatra', 'admin'), (req, res) => {
   const values   = [newName, newEmail, newPass];
   for (const f of PROFILE_FIELDS) {
     if (req.body[f] !== undefined) {
+      let value = req.body[f] || null;
+      if (f === 'photo') {
+        // Los data URL se persisten como archivo; se guarda solo la ruta
+        try { value = persistPhoto(id, value); }
+        catch (e) { return res.status(400).json({ error: e.message }); }
+      }
       setParts.push(`${f} = ?`);
-      values.push(req.body[f] || null);
+      values.push(value);
     }
   }
   values.push(id);
@@ -140,8 +147,14 @@ router.put('/:id', requireRole('admin'), (req, res) => {
   const values   = [newName, newEmail, newPass];
   for (const f of PROFILE_FIELDS) {
     if (req.body[f] !== undefined) {
+      let value = req.body[f] || null;
+      if (f === 'photo') {
+        // Los data URL se persisten como archivo; se guarda solo la ruta
+        try { value = persistPhoto(id, value); }
+        catch (e) { return res.status(400).json({ error: e.message }); }
+      }
       setParts.push(`${f} = ?`);
-      values.push(req.body[f] || null);
+      values.push(value);
     }
   }
   values.push(id);
