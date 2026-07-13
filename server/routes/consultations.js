@@ -2,6 +2,7 @@
 const { db } = require('../database');
 const { requireAuth } = require('../middleware/auth');
 const { requireRole } = require('../middleware/roles');
+const { canAccessPatient, canEditPatient } = require('../middleware/access');
 
 const router = express.Router({ mergeParams: true });
 router.use(requireAuth);
@@ -59,9 +60,9 @@ function getVitalAlerts(ageMonths, v) {
   // ── SpO2 ───────────────────────────────────────────────────────────
   if (v.spo2 != null) {
     if (v.spo2 < 90) {
-      alerts.push({ sign:'SpOâ‚‚', value: v.spo2, unit:'%', level:'danger', msg:'Hipoxemia severa', normal:'â‰¥95 %' });
+      alerts.push({ sign:'SpO₂', value: v.spo2, unit:'%', level:'danger', msg:'Hipoxemia severa', normal:'≥95 %' });
     } else if (v.spo2 < 95) {
-      alerts.push({ sign:'SpOâ‚‚', value: v.spo2, unit:'%', level:'warning', msg:'Hipoxemia leve', normal:'â‰¥95 %' });
+      alerts.push({ sign:'SpO₂', value: v.spo2, unit:'%', level:'warning', msg:'Hipoxemia leve', normal:'≥95 %' });
     }
   }
 
@@ -108,13 +109,6 @@ function suggestNextVisit(birthDateStr, consultDateStr) {
   return next.toISOString().slice(0, 10);
 }
 
-function canAccessPatient(user, patient) {
-  if (user.role === 'admin') return true;
-  if (user.role === 'pediatra') return patient.doctor_id === user.id;
-  if (user.role === 'tutor') return patient.tutor_id === user.id;
-  return false;
-}
-
 // GET /api/patients/:patientId/consultations
 router.get('/', (req, res) => {
   const patientId = parseInt(req.params.patientId);
@@ -132,8 +126,8 @@ router.post('/', requireRole('admin', 'pediatra'), (req, res) => {
   const patient = db.prepare('SELECT * FROM patients WHERE id = ?').get(patientId);
   if (!patient) return res.status(404).json({ error: 'Paciente no encontrado' });
 
-  if (req.user.role === 'pediatra' && patient.doctor_id !== req.user.id) {
-    return res.status(403).json({ error: 'No puedes registrar consultas de pacientes de otro doctor' });
+  if (!canEditPatient(req.user, patient)) {
+    return res.status(403).json({ error: 'No puedes registrar consultas de este paciente' });
   }
 
   const { date, type, weight, height, head_circ, notes, medications,
@@ -188,7 +182,7 @@ router.put('/:id', requireRole('admin', 'pediatra'), (req, res) => {
   const patient = db.prepare('SELECT * FROM patients WHERE id = ?').get(patientId);
   if (!patient) return res.status(404).json({ error: 'Paciente no encontrado' });
 
-  if (req.user.role === 'pediatra' && patient.doctor_id !== req.user.id) {
+  if (!canEditPatient(req.user, patient)) {
     return res.status(403).json({ error: 'Acceso denegado' });
   }
 
@@ -248,7 +242,7 @@ router.delete('/:id', requireRole('admin', 'pediatra'), (req, res) => {
   const patient = db.prepare('SELECT * FROM patients WHERE id = ?').get(patientId);
   if (!patient) return res.status(404).json({ error: 'Paciente no encontrado' });
 
-  if (req.user.role === 'pediatra' && patient.doctor_id !== req.user.id) {
+  if (!canEditPatient(req.user, patient)) {
     return res.status(403).json({ error: 'Acceso denegado' });
   }
 

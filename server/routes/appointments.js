@@ -2,6 +2,7 @@ const express = require('express');
 const { db } = require('../database');
 const { requireAuth } = require('../middleware/auth');
 const { requireRole } = require('../middleware/roles');
+const { ADMIN_ROLES } = require('../middleware/access');
 
 const router = express.Router();
 router.use(requireAuth);
@@ -17,7 +18,7 @@ router.get('/availability/:doctorId', (req, res) => {
 
 // PUT /api/appointments/availability — doctor actualiza su disponibilidad semanal
 router.put('/availability', requireRole('admin', 'pediatra'), (req, res) => {
-  const doctorId = req.user.role === 'admin' && req.body.doctor_id ? req.body.doctor_id : req.user.id;
+  const doctorId = ADMIN_ROLES.includes(req.user.role) && req.body.doctor_id ? req.body.doctor_id : req.user.id;
   const { availability } = req.body;
 
   if (!Array.isArray(availability)) {
@@ -90,7 +91,7 @@ router.get('/', (req, res) => {
   `;
 
   let rows;
-  if (req.user.role === 'admin') {
+  if (ADMIN_ROLES.includes(req.user.role)) {
     rows = date
       ? db.prepare(`${baseQuery} WHERE a.date = ? ORDER BY a.time`).all(date)
       : db.prepare(`${baseQuery} ORDER BY a.date DESC, a.time`).all();

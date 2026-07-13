@@ -2,6 +2,12 @@ const express        = require('express');
 const router         = express.Router({ mergeParams: true });
 const { db }         = require('../database');
 const { requireAuth} = require('../middleware/auth');
+const { canAccessPatient, canEditPatient } = require('../middleware/access');
+
+// Carga el paciente y valida existencia; helper local para las rutas de abajo.
+function loadPatient(patientId) {
+  return db.prepare('SELECT id, doctor_id, tutor_id FROM patients WHERE id = ?').get(patientId);
+}
 
 // ── Denver II: key milestones per age checkpoint ───────────────────────────
 // Each item: { id, domain, text, age90 }  (age90 = latest month P90 passes)
@@ -184,6 +190,9 @@ router.get('/items', requireAuth, (req, res) => {
 // GET /api/patients/:patientId/neurodevelopment
 router.get('/', requireAuth, (req, res) => {
   const { patientId } = req.params;
+  const patient = loadPatient(patientId);
+  if (!patient) return res.status(404).json({ error: 'Paciente no encontrado' });
+  if (!canAccessPatient(req.user, patient)) return res.status(403).json({ error: 'Acceso denegado' });
   const rows = db.prepare(`
     SELECT n.*, u.name as created_by_name
     FROM neurodevelopment_assessments n
@@ -201,8 +210,10 @@ router.get('/', requireAuth, (req, res) => {
 
 // POST /api/patients/:patientId/neurodevelopment
 router.post('/', requireAuth, (req, res) => {
-  if (req.user.role === 'tutor') return res.status(403).json({ error: 'Sin permisos' });
   const { patientId } = req.params;
+  const patient = loadPatient(patientId);
+  if (!patient) return res.status(404).json({ error: 'Paciente no encontrado' });
+  if (!canEditPatient(req.user, patient)) return res.status(403).json({ error: 'Sin permisos' });
   const { type, age_months, date, responses, notes } = req.body;
 
   if (!type || !date || !responses) return res.status(400).json({ error: 'type, date y responses son requeridos' });
@@ -237,8 +248,10 @@ router.post('/', requireAuth, (req, res) => {
 
 // DELETE /api/patients/:patientId/neurodevelopment/:aid
 router.delete('/:aid', requireAuth, (req, res) => {
-  if (req.user.role === 'tutor') return res.status(403).json({ error: 'Sin permisos' });
   const { aid, patientId } = req.params;
+  const patient = loadPatient(patientId);
+  if (!patient) return res.status(404).json({ error: 'Paciente no encontrado' });
+  if (!canEditPatient(req.user, patient)) return res.status(403).json({ error: 'Sin permisos' });
   db.prepare('DELETE FROM neurodevelopment_assessments WHERE id = ? AND patient_id = ?').run(aid, patientId);
   res.json({ ok: true });
 });

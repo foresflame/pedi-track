@@ -1380,6 +1380,15 @@ header {
     .topbar-quick,
     .topbar-primary { padding: 0.5rem 0.7rem; }
 
+    /* Objetivos táctiles ≥44px en móvil (accesibilidad) */
+    .topbar-hamburger,
+    .topbar-quick,
+    .topbar-primary { min-width: 44px; min-height: 44px; justify-content: center; }
+    .modal-overlay .close-btn {
+        min-width: 44px; min-height: 44px;
+        display: inline-flex; align-items: center; justify-content: center;
+    }
+
     .app-content { padding: 1rem; }
     .stats-row { grid-template-columns: repeat(2, 1fr) !important; gap: 0.7rem; }
     .stat-pill { padding: 0.85rem 1rem; }

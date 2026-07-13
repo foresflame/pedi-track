@@ -2,6 +2,7 @@ const express        = require('express');
 const router         = express.Router({ mergeParams: true });
 const { db }         = require('../database');
 const { requireAuth} = require('../middleware/auth');
+const { canAccessPatient, canEditPatient } = require('../middleware/access');
 
 // ── NOM-031 / Cartilla Nacional de Vacunación México 2024 ──────────────────
 const NOM_SCHEDULE = [
@@ -82,6 +83,9 @@ function computeStatus(v, today) {
 // GET /api/patients/:patientId/vaccinations
 router.get('/', requireAuth, (req, res) => {
   const { patientId } = req.params;
+  const patient = db.prepare('SELECT id, doctor_id, tutor_id FROM patients WHERE id = ?').get(patientId);
+  if (!patient) return res.status(404).json({ error: 'Paciente no encontrado' });
+  if (!canAccessPatient(req.user, patient)) return res.status(403).json({ error: 'Acceso denegado' });
   ensureSchedule(patientId);
 
   const rows = db.prepare(`
@@ -110,8 +114,10 @@ router.get('/', requireAuth, (req, res) => {
 
 // POST /api/patients/:patientId/vaccinations/:vaccId/apply
 router.post('/:vaccId/apply', requireAuth, (req, res) => {
-  if (req.user.role === 'tutor') return res.status(403).json({ error: 'Sin permisos' });
   const { vaccId, patientId } = req.params;
+  const patient = db.prepare('SELECT id, doctor_id, tutor_id FROM patients WHERE id = ?').get(patientId);
+  if (!patient) return res.status(404).json({ error: 'Paciente no encontrado' });
+  if (!canEditPatient(req.user, patient)) return res.status(403).json({ error: 'Sin permisos' });
   const { applied_at, lot, notes } = req.body;
 
   const updated = db.prepare(`
@@ -136,8 +142,10 @@ router.post('/:vaccId/apply', requireAuth, (req, res) => {
 
 // PUT /api/patients/:patientId/vaccinations/:vaccId/unapply  (undo)
 router.put('/:vaccId/unapply', requireAuth, (req, res) => {
-  if (req.user.role === 'tutor') return res.status(403).json({ error: 'Sin permisos' });
   const { vaccId, patientId } = req.params;
+  const patient = db.prepare('SELECT id, doctor_id, tutor_id FROM patients WHERE id = ?').get(patientId);
+  if (!patient) return res.status(404).json({ error: 'Paciente no encontrado' });
+  if (!canEditPatient(req.user, patient)) return res.status(403).json({ error: 'Sin permisos' });
 
   const updated = db.prepare(`
     UPDATE vaccinations
