@@ -288,16 +288,16 @@ function renderAdminHome() {
             <tbody>
               ${topPediatras.length ? topPediatras.map((d, i) => `
                 <tr class="pt-row" onclick="viewPediatraDetail(${d.id})">
-                  <td style="text-align:center;font-weight:700;color:${i === 0 ? '#f59e0b' : 'var(--text-light)'};">${i + 1}</td>
-                  <td>
+                  <td data-label="#" style="text-align:center;font-weight:700;color:${i === 0 ? '#f59e0b' : 'var(--text-light)'};">${i + 1}</td>
+                  <td data-label="Pediatra" class="pt-cell-primary">
                     <div style="display:flex;align-items:center;gap:0.6rem;">
                       <div class="pt-avatar">${(d.name||'?').charAt(0).toUpperCase()}</div>
                       <div style="font-weight:600;">${d.name}</div>
                     </div>
                   </td>
-                  <td style="color:var(--text-light);font-size:0.85rem;">${d.email}</td>
-                  <td style="text-align:center;font-weight:600;color:var(--primary);">${d.count}</td>
-                  <td style="text-align:right;"><button class="pt-action" onclick="event.stopPropagation();viewPediatraDetail(${d.id})" title="Ver detalle"><i class="fa-solid fa-eye"></i></button></td>
+                  <td data-label="Correo" style="color:var(--text-light);font-size:0.85rem;">${d.email}</td>
+                  <td data-label="Pacientes activos" style="text-align:center;font-weight:600;color:var(--primary);">${d.count}</td>
+                  <td data-label="Acciones" style="text-align:right;"><button class="pt-action" onclick="event.stopPropagation();viewPediatraDetail(${d.id})" title="Ver detalle"><i class="fa-solid fa-eye"></i></button></td>
                 </tr>`).join('') : `<tr><td colspan="5" style="text-align:center;padding:2rem;color:var(--text-light);">Aún no hay pediatras registrados.</td></tr>`}
             </tbody>
           </table>
@@ -340,7 +340,7 @@ function renderAdminPediatras() {
                 const count = patients.filter(p => p.doctor_id === d.id).length;
                 return `
                 <tr class="pt-row" onclick="viewPediatraDetail(${d.id})">
-                  <td>
+                  <td data-label="Pediatra" class="pt-cell-primary">
                     <div style="display:flex;align-items:center;gap:0.6rem;">
                       <div class="pt-avatar">${(d.photo) ? `<img src="${d.photo}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">` : (d.name||'?').charAt(0).toUpperCase()}</div>
                       <div>
@@ -349,10 +349,10 @@ function renderAdminPediatras() {
                       </div>
                     </div>
                   </td>
-                  <td style="color:var(--text-light);font-size:0.85rem;">${d.email}</td>
-                  <td style="font-size:0.85rem;">${d.specialty || '<span style="color:var(--text-light);font-style:italic;">No especificada</span>'}</td>
-                  <td style="text-align:center;font-weight:600;color:var(--primary);">${count}</td>
-                  <td style="text-align:right;">
+                  <td data-label="Correo" style="color:var(--text-light);font-size:0.85rem;">${d.email}</td>
+                  <td data-label="Especialidad" style="font-size:0.85rem;">${d.specialty || '<span style="color:var(--text-light);font-style:italic;">No especificada</span>'}</td>
+                  <td data-label="Pacientes" style="text-align:center;font-weight:600;color:var(--primary);">${count}</td>
+                  <td data-label="Acciones" style="text-align:right;">
                     <button class="pt-action" onclick="event.stopPropagation();viewPediatraDetail(${d.id})" title="Ver detalle"><i class="fa-solid fa-eye"></i></button>
                     ${!ro ? `
                       <button class="pt-action" onclick="event.stopPropagation();editUser(${d.id})" title="Editar"><i class="fa-solid fa-pen"></i></button>
@@ -520,22 +520,22 @@ function renderAdminUsers() {
                   const isMe = u.id === currentUser.id;
                   return `
                   <tr class="pt-row">
-                    <td>
+                    <td data-label="Usuario" class="pt-cell-primary">
                       <div style="display:flex;align-items:center;gap:0.6rem;">
                         <div class="pt-avatar">${(u.name||'?').charAt(0).toUpperCase()}</div>
                         <div style="font-weight:600;">${u.name}${isMe ? ' <span style="font-size:0.7rem;color:var(--text-light);font-weight:400;">(tú)</span>' : ''}</div>
                       </div>
                     </td>
-                    <td style="color:var(--text-light);font-size:0.85rem;">${u.email}</td>
-                    <td>
+                    <td data-label="Correo" style="color:var(--text-light);font-size:0.85rem;">${u.email}</td>
+                    <td data-label="Rol">
                       <select onchange="changeUserRole(${u.id}, this.value, '${u.role}')" ${isMe ? 'disabled' : ''} style="padding:0.25rem 0.5rem;border:1px solid #e2e8f0;border-radius:6px;font-size:0.78rem;background:${rc.bg};color:${rc.color};font-weight:600;">
                         <option value="super_admin" ${u.role==='super_admin'?'selected':''}>Super Admin</option>
                         <option value="admin"       ${u.role==='admin'?'selected':''}>Administrador</option>
                         <option value="asesor"      ${u.role==='asesor'?'selected':''}>Asesor</option>
                       </select>
                     </td>
-                    <td style="font-size:0.82rem;color:var(--text-light);">${u.created_at ? new Date(u.created_at).toLocaleDateString('es-MX') : '—'}</td>
-                    <td style="text-align:right;">
+                    <td data-label="Creado" style="font-size:0.82rem;color:var(--text-light);">${u.created_at ? new Date(u.created_at).toLocaleDateString('es-MX') : '—'}</td>
+                    <td data-label="Acciones" style="text-align:right;">
                       <button class="pt-action" onclick="editUser(${u.id})" title="Editar"><i class="fa-solid fa-pen"></i></button>
                       <button class="pt-action" onclick="openResetPasswordForUser(${u.id}, '${u.name.replace(/'/g, "\\'")}')" title="Cambiar contraseña"><i class="fa-solid fa-key"></i></button>
                       ${!isMe ? `<button class="pt-action" onclick="deleteUser(${u.id})" title="Eliminar" style="color:#ef4444;"><i class="fa-solid fa-trash"></i></button>` : ''}
@@ -1123,7 +1123,7 @@ function renderDoctorDashboard() {
         const isActive = p.active !== 0; // null o 1 = activo (compat. con pacientes viejos)
         return `
           <tr class="pt-row ${isActive ? '' : 'is-inactive'}" onclick="viewPatient(${p.id})">
-            <td>
+            <td data-label="Paciente" class="pt-cell-primary">
               <div style="display:flex;align-items:center;gap:0.6rem;">
                 <div class="pt-avatar">${p.name.charAt(0).toUpperCase()}</div>
                 <div>
@@ -1132,28 +1132,28 @@ function renderDoctorDashboard() {
                 </div>
               </div>
             </td>
-            <td>
+            <td data-label="Edad / Sexo">
               <div style="font-weight:500;">${age}</div>
               <div style="font-size:0.78rem;color:var(--text-light);">${sexIcon} ${sex || '—'}</div>
             </td>
-            <td>
+            <td data-label="Tutor / Contacto">
               <div style="font-size:0.82rem;">
                 ${p.tutor_name ? `<div style="font-weight:500;">${p.tutor_name}</div>` : ''}
                 ${p.tutor_email ? `<div style="color:var(--text-light);font-size:0.78rem;">${p.tutor_email}</div>` : '<span style="color:var(--text-light);font-style:italic;">Sin tutor</span>'}
               </div>
             </td>
-            <td>${alerts.length ? `<div style="display:flex;flex-direction:column;gap:0.25rem;align-items:flex-start;">${alerts.join('')}</div>` : '<span style="color:var(--text-light);">—</span>'}</td>
-            <td style="text-align:center;font-weight:600;color:var(--primary);">${p.weight ? p.weight + ' kg' : '—'}</td>
-            <td style="text-align:center;font-weight:600;">${p.height ? p.height + ' cm' : '—'}</td>
-            <td style="font-size:0.82rem;line-height:1.3;">${nvLabel}</td>
-            <td style="text-align:center;">
+            <td data-label="Alertas">${alerts.length ? `<div style="display:flex;flex-direction:column;gap:0.25rem;align-items:flex-start;">${alerts.join('')}</div>` : '<span style="color:var(--text-light);">—</span>'}</td>
+            <td data-label="Peso" style="text-align:center;font-weight:600;color:var(--primary);">${p.weight ? p.weight + ' kg' : '—'}</td>
+            <td data-label="Talla" style="text-align:center;font-weight:600;">${p.height ? p.height + ' cm' : '—'}</td>
+            <td data-label="Próxima visita" style="font-size:0.82rem;line-height:1.3;">${nvLabel}</td>
+            <td data-label="Seguimiento" style="text-align:center;">
               <label class="pt-toggle" onclick="event.stopPropagation();" title="${isActive ? 'Activo' : 'Inactivo'}">
                 <input type="checkbox" ${isActive ? 'checked' : ''} onchange="togglePatientActive(${p.id}, this.checked)">
                 <span class="pt-toggle-slider"></span>
               </label>
               <div style="font-size:0.7rem;color:${isActive ? '#059669' : 'var(--text-light)'};font-weight:600;margin-top:0.2rem;">${isActive ? 'Activo' : 'Inactivo'}</div>
             </td>
-            <td style="text-align:right;">
+            <td data-label="Acciones" style="text-align:right;">
               <button class="pt-action" onclick="event.stopPropagation();viewPatient(${p.id})" title="Ver expediente"><i class="fa-solid fa-eye"></i></button>
               ${p.tutor_id ? `<button class="pt-action" onclick="event.stopPropagation();openResetPasswordModal(${p.tutor_id})" title="Clave del tutor"><i class="fa-solid fa-key"></i></button>` : ''}
             </td>

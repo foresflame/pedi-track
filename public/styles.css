@@ -1479,9 +1479,78 @@ header {
 }
 
 @media (max-width: 480px) {
-    .stats-row { grid-template-columns: 1fr !important; }
-    .profile-stats { grid-template-columns: 1fr; }
+    /* Las stat-pills se quedan en 2 columnas (más compacto que apilarlas) */
+    .stats-row { grid-template-columns: repeat(2, 1fr) !important; gap: 0.6rem; }
+    .stat-pill { padding: 0.7rem 0.8rem; gap: 0.6rem; }
+    .stat-pill-icon { width: 34px; height: 34px; font-size: 0.95rem; }
+    .stat-pill-value { font-size: 1.2rem; }
+    .stat-pill-label { font-size: 0.72rem; }
+    .profile-stats { grid-template-columns: repeat(2, 1fr); }
     .hero-banner h1 { font-size: 1.2rem !important; }
+}
+
+/* ================================================================
+   Tabla de pacientes → tarjetas apiladas en móvil (≤640px)
+   Cada fila se convierte en una tarjeta con etiqueta por campo, de
+   modo que ninguna columna queda oculta tras scroll horizontal.
+   ================================================================ */
+@media (max-width: 640px) {
+    .table-card > div[style*="overflow-x"] { overflow-x: visible !important; }
+
+    .patients-table { min-width: 0 !important; }
+    .patients-table thead { display: none; } /* los data-label sustituyen los encabezados */
+    .patients-table,
+    .patients-table tbody,
+    .patients-table tr,
+    .patients-table td { display: block; width: 100%; }
+
+    .patients-table tr.pt-row {
+        background: var(--white);
+        border: 1px solid #eef2f7;
+        border-radius: 12px;
+        box-shadow: 0 1px 5px rgba(0,0,0,0.05);
+        padding: 0.35rem 0.95rem 0.55rem;
+        margin-bottom: 0.85rem;
+    }
+
+    .patients-table td {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 1rem;
+        text-align: right !important;
+        padding: 0.55rem 0 !important;
+        border-bottom: 1px solid #f1f5f9;
+        min-height: 44px;
+        font-size: 0.9rem !important;
+    }
+    .patients-table td:last-child { border-bottom: none; }
+
+    /* Etiqueta del campo a la izquierda de cada valor */
+    .patients-table td::before {
+        content: attr(data-label);
+        font-weight: 600;
+        color: var(--text-light);
+        font-size: 0.72rem;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+        text-align: left;
+        flex-shrink: 0;
+    }
+
+    /* Primera celda (nombre + avatar) como cabecera de la tarjeta */
+    .patients-table td.pt-cell-primary {
+        border-bottom: 2px solid #f1f5f9;
+        padding-top: 0.7rem !important;
+    }
+    .patients-table td.pt-cell-primary::before { display: none; }
+    .pt-avatar { width: 40px; height: 40px; font-size: 1rem; }
+
+    /* Que las alertas y acciones queden alineadas a la derecha correctamente */
+    .patients-table td[data-label="Alertas"] > div { align-items: flex-end !important; }
+    .patients-table td[data-label="Acciones"] { justify-content: space-between; }
+    .patients-table td[data-label="Seguimiento"] { gap: 0.6rem; }
+    .pt-action { min-width: 40px; min-height: 40px; }
 }
 
 /* Forzar wrap en cualquier texto largo dentro de tarjetas */
