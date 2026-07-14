@@ -137,7 +137,7 @@ function seed() {
     `INSERT INTO appointments (patient_id, doctor_id, date, time, status, notes) VALUES (?, ?, ?, ?, ?, ?)`);
 
   const today = new Date();
-  const summary = { pediatras: 0, tutores: 0, pacientes: 0, consultas: 0, citas: 0 };
+  const summary = { pediatras: 0, tutores: 0, pacientes: 0, consultas: 0, citas: 0, citasVencidas: 0 };
   let usedNames = new Set();
 
   const run = db.transaction(() => {
@@ -238,6 +238,18 @@ function seed() {
             pick(['pendiente','confirmada']), 'Cita de control');
           summary.citas++;
         }
+
+        // Cita VENCIDA sin atender (no-show) para ~1 de cada 3 pacientes:
+        // fecha pasada pero aún pendiente/confirmada. Sirve para probar la
+        // limpieza de citas vencidas.
+        if (Math.random() < 0.35) {
+          const pastDate = iso(addDays(today, -rndInt(3, 45)));
+          try {
+            insAppt.run(patientId, docId, pastDate, pick(['08:30','09:00','10:30','11:30','17:00']),
+              pick(['pendiente','confirmada']), 'No asistió');
+            summary.citasVencidas = (summary.citasVencidas || 0) + 1;
+          } catch (e) { /* colisión de slot único, se ignora */ }
+        }
       }
     });
   });
@@ -264,6 +276,7 @@ console.log(`   • ${s.pacientes} pacientes`);
 console.log(`   • ${s.tutores} tutores`);
 console.log(`   • ${s.consultas} consultas`);
 console.log(`   • ${s.citas} citas próximas`);
+console.log(`   • ${s.citasVencidas} citas vencidas sin atender (para probar la limpieza)`);
 console.log('\n🔑 Acceso (todos con la misma contraseña):');
 console.log(`   Contraseña: ${DEMO_PASSWORD}`);
 PEDIATRAS.forEach(p => console.log(`   • ${p.email}`));

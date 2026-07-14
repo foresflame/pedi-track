@@ -7,6 +7,28 @@ const { ADMIN_ROLES } = require('../middleware/access');
 const router = express.Router();
 router.use(requireAuth);
 
+// POST /api/appointments/cleanup-past — cancela en bloque las citas vencidas
+// (fecha < hoy) que quedaron sin atender (pendientes o confirmadas): "no-shows".
+// Pediatra: solo las suyas. Admin/super_admin: todas, o de un pediatra concreto
+// si envía { doctor_id }. Asesor (solo lectura) no entra por requireRole.
+router.post('/cleanup-past', requireRole('admin', 'pediatra'), (req, res) => {
+  const today = new Date().toISOString().slice(0, 10);
+  const NO_SHOW = "date < ? AND status IN ('pendiente','confirmada')";
+
+  let result;
+  if (req.user.role === 'pediatra') {
+    result = db.prepare(`UPDATE appointments SET status='cancelada' WHERE doctor_id = ? AND ${NO_SHOW}`)
+               .run(req.user.id, today);
+  } else if (req.body && req.body.doctor_id) {
+    result = db.prepare(`UPDATE appointments SET status='cancelada' WHERE doctor_id = ? AND ${NO_SHOW}`)
+               .run(parseInt(req.body.doctor_id), today);
+  } else {
+    result = db.prepare(`UPDATE appointments SET status='cancelada' WHERE ${NO_SHOW}`).run(today);
+  }
+
+  res.json({ cancelled: result.changes });
+});
+
 // GET /api/appointments/availability/:doctorId
 router.get('/availability/:doctorId', (req, res) => {
   const doctorId = parseInt(req.params.doctorId);

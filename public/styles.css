@@ -1295,6 +1295,40 @@ header {
 .alert-chronic { background: #ede9fe; color: #5b21b6; }
 .alert-pending { background: #fef3c7; color: #92400e; }
 
+/* Banner de limpieza de citas vencidas */
+.cleanup-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    background: linear-gradient(135deg, #fffbeb, #fef3c7);
+    border: 1px solid #fcd34d;
+    border-left: 4px solid #f59e0b;
+    border-radius: 12px;
+    padding: 0.9rem 1.1rem;
+    margin-bottom: 1.5rem;
+}
+.cleanup-banner-text {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    color: #92400e;
+    min-width: 0;
+}
+.cleanup-banner-text > i { font-size: 1.4rem; flex-shrink: 0; }
+.cleanup-banner .btn {
+    background: #f59e0b;
+    color: white;
+    flex-shrink: 0;
+    padding: 0.6rem 1.1rem;
+    box-shadow: 0 2px 8px rgba(245, 158, 11, 0.3);
+}
+.cleanup-banner .btn:hover { background: #d97706; transform: translateY(-1px); }
+@media (max-width: 640px) {
+    .cleanup-banner { flex-direction: column; align-items: stretch; }
+    .cleanup-banner .btn { width: 100%; justify-content: center; }
+}
+
 /* ── Botón hamburguesa + backdrop (móvil/tablet) ──────────────────────────── */
 .topbar-hamburger {
     display: none;

@@ -90,6 +90,7 @@ async function refreshData() {
       patients = (await API.get('/patients')) || [];
       if (isAdminLike(currentUser.role)) {
         pediatricians = (await API.get('/users/pediatras')) || [];
+        doctorAppointments = (await API.get('/appointments')) || []; // para contar citas vencidas
       }
       if (currentUser.role === 'pediatra') {
         const today = new Date().toISOString().slice(0, 10);
@@ -232,6 +233,8 @@ function renderAdminHome() {
         </div>
         <div class="hero-illustration"><i class="fa-solid fa-chart-line"></i></div>
       </div>
+
+      ${renderCleanupBanner()}
 
       <div class="stats-row">
         <div class="stat-pill">
@@ -914,6 +917,8 @@ function renderDoctorHome() {
         </div>
         <div class="hero-illustration"><i class="fa-solid fa-calendar-day"></i></div>
       </div>
+
+      ${renderCleanupBanner()}
 
       <div class="stats-row">
         <div class="stat-pill">
@@ -2824,6 +2829,25 @@ function renderModals() {
       </div>
     </div>
 
+    <!-- Limpiar citas vencidas -->
+    <div class="modal-overlay" id="cleanupApptsModal" onclick="if(event.target===this)closeModal('cleanupApptsModal')">
+      <div class="modal-content" style="max-width:420px;text-align:center;">
+        <i class="fa-solid fa-broom" style="font-size:3rem;color:#f59e0b;margin-bottom:1rem;"></i>
+        <h2 style="margin-bottom:0.75rem;">¿Limpiar citas vencidas?</h2>
+        <p style="color:var(--text-light);margin-bottom:0.5rem;">
+          Se cancelarán <strong>${typeof countPastNoShows === 'function' ? countPastNoShows() : ''}</strong> cita(s)
+          cuya fecha ya pasó y siguen sin atender (pendientes o confirmadas).
+        </p>
+        <p style="color:var(--text-light);font-size:0.82rem;margin-bottom:1.5rem;">
+          Quedarán marcadas como <em>canceladas</em> (no se borran; el registro se conserva).
+        </p>
+        <div style="display:flex;gap:1rem;">
+          <button class="btn" style="flex:1;background:#f1f5f9;color:var(--text-dark);" onclick="closeModal('cleanupApptsModal')">Cancelar</button>
+          <button class="btn" id="cleanupConfirmBtn" style="flex:1;background:#f59e0b;color:white;" onclick="confirmCleanupAppts()"><i class="fa-solid fa-broom"></i> Sí, cancelarlas</button>
+        </div>
+      </div>
+    </div>
+
     <!-- User Modal -->
     <div class="modal-overlay" id="userModal" onclick="if(event.target===this)closeModal('userModal')">
       <div class="modal-content">
@@ -4338,6 +4362,55 @@ window.updateAppointmentStatus = async function(id, status) {
     doctorAppointments = (await API.get('/appointments')) || [];
     renderApp();
   } catch (e) { alert('Error: '+e.message); }
+};
+
+// === Limpieza de citas vencidas (no-shows) ===
+// Cuenta citas cuya fecha ya pasó y siguen pendientes/confirmadas.
+function countPastNoShows() {
+  const today = new Date().toISOString().slice(0, 10);
+  return (doctorAppointments || []).filter(a =>
+    a.date < today && (a.status === 'pendiente' || a.status === 'confirmada')
+  ).length;
+}
+
+// Banner reutilizable con botón; se muestra solo si hay citas vencidas y el
+// usuario puede editar (pediatra o admin/super_admin, no asesor).
+function renderCleanupBanner() {
+  if (currentUser.role === 'asesor') return '';
+  const n = countPastNoShows();
+  if (n === 0) return '';
+  return `
+    <div class="cleanup-banner">
+      <div class="cleanup-banner-text">
+        <i class="fa-solid fa-calendar-xmark"></i>
+        <div>
+          <strong>${n} cita${n === 1 ? '' : 's'} vencida${n === 1 ? '' : 's'} sin atender</strong>
+          <div style="font-size:0.82rem;opacity:0.85;">Quedaron pendientes o confirmadas y su fecha ya pasó.</div>
+        </div>
+      </div>
+      <button class="btn" onclick="openModal('cleanupApptsModal')">
+        <i class="fa-solid fa-broom"></i> Limpiar citas vencidas
+      </button>
+    </div>`;
+}
+
+window.confirmCleanupAppts = async function() {
+  const btn = document.getElementById('cleanupConfirmBtn');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Limpiando...'; }
+  try {
+    const res = await API.post('/appointments/cleanup-past', {});
+    closeModal('cleanupApptsModal');
+    doctorAppointments = (await API.get('/appointments')) || [];
+    if (currentUser.role === 'pediatra') {
+      const today = new Date().toISOString().slice(0, 10);
+      todayAppointments = (await API.get(`/appointments?date=${today}`)) || [];
+    }
+    renderApp();
+    alert(`Listo. Se cancelaron ${res.cancelled} cita${res.cancelled === 1 ? '' : 's'} vencida${res.cancelled === 1 ? '' : 's'}.`);
+  } catch (e) {
+    alert('Error: ' + e.message);
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-broom"></i> Sí, cancelarlas'; }
+  }
 };
 
 // === Onboarding handlers ===
