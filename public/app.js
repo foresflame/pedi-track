@@ -359,7 +359,7 @@ function renderAdminPediatras() {
                     <button class="pt-action" onclick="event.stopPropagation();viewPediatraDetail(${d.id})" title="Ver detalle"><i class="fa-solid fa-eye"></i></button>
                     ${!ro ? `
                       <button class="pt-action" onclick="event.stopPropagation();editUser(${d.id})" title="Editar"><i class="fa-solid fa-pen"></i></button>
-                      <button class="pt-action" onclick="event.stopPropagation();openResetPasswordForUser(${d.id}, '${d.name.replace(/'/g, "\\'")}')" title="Cambiar contraseña"><i class="fa-solid fa-key"></i></button>
+                      <button class="pt-action" onclick="event.stopPropagation();openResetPasswordForUser(${d.id}, '${d.name.replace(/'/g, "\\'")}', '${(d.email||'').replace(/'/g,"\\'")}')" title="Cambiar contraseña"><i class="fa-solid fa-key"></i></button>
                       <button class="pt-action" onclick="event.stopPropagation();deleteUser(${d.id})" title="Eliminar" style="color:#ef4444;"><i class="fa-solid fa-trash"></i></button>
                     ` : ''}
                   </td>
@@ -408,7 +408,7 @@ function renderAdminPediatraDetail() {
           ${!ro ? `
             <div style="display:flex;flex-direction:column;gap:0.5rem;">
               <button class="btn" style="background:white;color:var(--primary);" onclick="editUser(${d.id})"><i class="fa-solid fa-pen"></i> Editar</button>
-              <button class="btn" style="background:rgba(255,255,255,0.2);color:white;border:1px solid rgba(255,255,255,0.5);" onclick="openResetPasswordForUser(${d.id}, '${d.name.replace(/'/g, "\\'")}')"><i class="fa-solid fa-key"></i> Cambiar clave</button>
+              <button class="btn" style="background:rgba(255,255,255,0.2);color:white;border:1px solid rgba(255,255,255,0.5);" onclick="openResetPasswordForUser(${d.id}, '${d.name.replace(/'/g, "\\'")}', '${(d.email||'').replace(/'/g,"\\'")}')"><i class="fa-solid fa-key"></i> Cambiar clave</button>
             </div>
           ` : ''}
         </div>
@@ -455,7 +455,7 @@ function renderAdminPediatraDetail() {
                   <td style="text-align:center;"><span class="alert-pill" style="background:${isActive ? '#d1fae5' : '#f1f5f9'};color:${isActive ? '#065f46' : '#64748b'};">${isActive ? 'Activo' : 'Inactivo'}</span></td>
                   <td style="text-align:right;">
                     <button class="pt-action" onclick="event.stopPropagation();viewPatient(${p.id})" title="Ver expediente"><i class="fa-solid fa-eye"></i></button>
-                    ${!ro && p.tutor_id ? `<button class="pt-action" onclick="event.stopPropagation();openResetPasswordModal(${p.tutor_id})" title="Cambiar clave del tutor"><i class="fa-solid fa-key"></i></button>` : ''}
+                    ${!ro && p.tutor_id ? `<button class="pt-action" onclick="event.stopPropagation();openResetPasswordModal(${p.tutor_id}, '${(p.tutor_email||'').replace(/'/g,"\\'")}')" title="Cambiar clave del tutor"><i class="fa-solid fa-key"></i></button>` : ''}
                   </td>
                 </tr>`;
               }).join('') : `<tr><td colspan="5" style="text-align:center;padding:2rem;color:var(--text-light);">Sin pacientes asignados.</td></tr>`}
@@ -540,7 +540,7 @@ function renderAdminUsers() {
                     <td data-label="Creado" style="font-size:0.82rem;color:var(--text-light);">${u.created_at ? new Date(u.created_at).toLocaleDateString('es-MX') : '—'}</td>
                     <td data-label="Acciones" style="text-align:right;">
                       <button class="pt-action" onclick="editUser(${u.id})" title="Editar"><i class="fa-solid fa-pen"></i></button>
-                      <button class="pt-action" onclick="openResetPasswordForUser(${u.id}, '${u.name.replace(/'/g, "\\'")}')" title="Cambiar contraseña"><i class="fa-solid fa-key"></i></button>
+                      <button class="pt-action" onclick="openResetPasswordForUser(${u.id}, '${u.name.replace(/'/g, "\\'")}', '${(u.email||'').replace(/'/g,"\\'")}')" title="Cambiar contraseña"><i class="fa-solid fa-key"></i></button>
                       ${!isMe ? `<button class="pt-action" onclick="deleteUser(${u.id})" title="Eliminar" style="color:#ef4444;"><i class="fa-solid fa-trash"></i></button>` : ''}
                     </td>
                   </tr>`;
@@ -574,13 +574,14 @@ window.openAddUserModal = function() {
   openModal('userModal');
 };
 
-window.openResetPasswordForUser = function(userId, name) {
+window.openResetPasswordForUser = function(userId, name, email) {
   // Reutilizamos el modal genérico de reset
   window.resetPasswordTutorId = userId;
   const inp = document.getElementById('resetPasswordInput');
   const cb = document.getElementById('resetPasswordCustom');
   if (cb) cb.checked = false;
   if (inp) { inp.value = generateRandomPassword(8); inp.readOnly = true; inp.style.background = '#f1f5f9'; }
+  setResetPasswordEmail(email);
   // Cambiar título dinámicamente
   setTimeout(() => {
     const h2 = document.querySelector('#resetPasswordModal .modal-header h2');
@@ -588,6 +589,15 @@ window.openResetPasswordForUser = function(userId, name) {
   }, 10);
   openModal('resetPasswordModal');
 };
+
+// Muestra (u oculta) el correo del usuario dentro del modal de reset
+function setResetPasswordEmail(email) {
+  const box = document.getElementById('resetPasswordUserInfo');
+  const el  = document.getElementById('resetPasswordEmail');
+  if (!box || !el) return;
+  if (email) { el.textContent = email; box.style.display = 'block'; }
+  else { el.textContent = '—'; box.style.display = 'none'; }
+}
 
 function renderAdminDashboard() {
   const tutorCount = patients.filter(p => p.tutor_id).length;
@@ -663,7 +673,7 @@ function renderAdminDashboard() {
                 </td>
                 <td style="padding:0.9rem 0.5rem;text-align:right;">
                   <div style="display:inline-flex;gap:0.3rem;flex-wrap:wrap;justify-content:flex-end;">
-                    ${p.tutor_id ? `<button class="btn" style="padding:0.3rem 0.55rem;font-size:0.72rem;background:#fef3c7;color:#92400e;box-shadow:none;border:1px solid #fbbf24;" onclick="openResetPasswordModal(${p.tutor_id})" title="Resetear contraseña del tutor"><i class="fa-solid fa-key"></i> Clave</button>` : ''}
+                    ${p.tutor_id ? `<button class="btn" style="padding:0.3rem 0.55rem;font-size:0.72rem;background:#fef3c7;color:#92400e;box-shadow:none;border:1px solid #fbbf24;" onclick="openResetPasswordModal(${p.tutor_id}, '${(p.tutor_email||'').replace(/'/g,"\\'")}')" title="Resetear contraseña del tutor"><i class="fa-solid fa-key"></i> Clave</button>` : ''}
                     <button class="btn btn-secondary" style="padding:0.3rem 0.55rem;font-size:0.72rem;" onclick="openAssignPatientModal(${p.id})" title="Reasignar pediatra"><i class="fa-solid fa-user-doctor"></i></button>
                     <button class="btn" style="padding:0.3rem 0.55rem;font-size:0.72rem;background:transparent;color:#ef4444;box-shadow:none;" onclick="deletePatient(${p.id})" title="Eliminar paciente"><i class="fa-solid fa-trash"></i></button>
                   </div>
@@ -1176,7 +1186,7 @@ function renderDoctorDashboard() {
             </td>
             <td data-label="Acciones" style="text-align:right;">
               <button class="pt-action" onclick="event.stopPropagation();viewPatient(${p.id})" title="Ver expediente"><i class="fa-solid fa-eye"></i></button>
-              ${p.tutor_id ? `<button class="pt-action" onclick="event.stopPropagation();openResetPasswordModal(${p.tutor_id})" title="Clave del tutor"><i class="fa-solid fa-key"></i></button>` : ''}
+              ${p.tutor_id ? `<button class="pt-action" onclick="event.stopPropagation();openResetPasswordModal(${p.tutor_id}, '${(p.tutor_email||'').replace(/'/g,"\\'")}')" title="Clave del tutor"><i class="fa-solid fa-key"></i></button>` : ''}
             </td>
           </tr>`;
       }).join('')
@@ -1404,7 +1414,7 @@ function renderParentProfile() {
               <i class="fa-solid fa-notes-medical"></i> Registrar Consulta
             </button>
             <button class="btn" style="background:rgba(255,255,255,0.2);color:white;border:1px solid rgba(255,255,255,0.5);" onclick="openEditExpediente()" title="Editar expediente clínico"><i class="fa-solid fa-folder-open"></i> Expediente</button>
-            ${p.tutor_id ? `<button class="btn" style="background:rgba(255,255,255,0.2);color:white;border:1px solid rgba(255,255,255,0.5);" onclick="openResetPasswordModal(${p.tutor_id})" title="Cambiar clave del tutor"><i class="fa-solid fa-key"></i></button>` : ''}
+            ${p.tutor_id ? `<button class="btn" style="background:rgba(255,255,255,0.2);color:white;border:1px solid rgba(255,255,255,0.5);" onclick="openResetPasswordModal(${p.tutor_id}, '${(p.tutor_email||'').replace(/'/g,"\\'")}')" title="Cambiar clave del tutor"><i class="fa-solid fa-key"></i></button>` : ''}
           ` : ''}
         </div>
       </div>
@@ -2922,6 +2932,10 @@ function renderModals() {
     <div class="modal-overlay" id="resetPasswordModal" onclick="if(event.target===this)closeModal('resetPasswordModal')">
       <div class="modal-content" style="max-width:440px;">
         <div class="modal-header"><h2>Cambiar Contraseña del Tutor</h2><button class="close-btn" onclick="closeModal('resetPasswordModal')"><i class="fa-solid fa-xmark"></i></button></div>
+        <div id="resetPasswordUserInfo" style="display:none;background:var(--primary-light);border-radius:8px;padding:0.65rem 0.85rem;margin-bottom:1rem;">
+          <div style="font-size:0.7rem;color:var(--primary);text-transform:uppercase;letter-spacing:0.04em;font-weight:700;margin-bottom:0.15rem;"><i class="fa-solid fa-envelope"></i> Correo del usuario</div>
+          <div id="resetPasswordEmail" style="font-weight:600;font-size:0.9rem;color:var(--text-dark);word-break:break-all;">—</div>
+        </div>
         <p style="color:var(--text-light);font-size:0.85rem;margin-bottom:1rem;">Se generó una contraseña aleatoria de 8 caracteres. Compártela con el tutor.</p>
         <div class="form-group">
           <label>Nueva Contraseña</label>
@@ -3986,6 +4000,7 @@ window.closeModal = function(id) {
   if (id === 'resetPasswordModal') {
     const h2 = document.querySelector('#resetPasswordModal .modal-header h2');
     if (h2) h2.textContent = 'Cambiar Contraseña del Tutor';
+    setResetPasswordEmail(null);
   }
   if (id === 'addConsultModal') {
     window.editingConsultId = null; window.editingConsultIndex = null;
@@ -4306,7 +4321,7 @@ window.generateRandomPassword = function(length = 8) {
   return s;
 };
 
-window.openResetPasswordModal = function(tutorId) {
+window.openResetPasswordModal = function(tutorId, email) {
   window.resetPasswordTutorId = tutorId;
   const inp = document.getElementById('resetPasswordInput');
   const cb  = document.getElementById('resetPasswordCustom');
@@ -4316,6 +4331,7 @@ window.openResetPasswordModal = function(tutorId) {
     inp.readOnly = true;
     inp.style.background = '#f1f5f9';
   }
+  setResetPasswordEmail(email);
   openModal('resetPasswordModal');
 };
 
