@@ -168,8 +168,9 @@ router.post('/', requireRole('admin', 'pediatra'), (req, res) => {
     vitalsPayload.spo2, vitalsPayload.bp_systolic, vitalsPayload.bp_diastolic
   );
 
-  // Actualizar peso y talla del paciente con la consulta más reciente
-  db.prepare('UPDATE patients SET weight = ?, height = ? WHERE id = ?')
+  // Actualizar peso y talla del paciente con la consulta más reciente.
+  // Reactivar el recordatorio de próxima visita (nueva consulta = nuevo ciclo).
+  db.prepare('UPDATE patients SET weight = ?, height = ?, next_visit_dismissed = 0 WHERE id = ?')
     .run(parseFloat(weight), parseFloat(height), patientId);
 
   const created = parseConsult(db.prepare('SELECT * FROM consultations WHERE id = ?').get(result.lastInsertRowid));

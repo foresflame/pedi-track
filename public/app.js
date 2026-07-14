@@ -814,6 +814,17 @@ window.togglePatientActive = async function(patientId, active) {
   } catch(e) { alert('Error: ' + e.message); }
 };
 
+// Descartar el recordatorio de próxima visita de un paciente (bote de basura).
+// Reaparece cuando se le registra una nueva consulta.
+window.dismissNextVisit = async function(patientId, name) {
+  try {
+    await API.put(`/patients/${patientId}/dismiss-next-visit`, { dismissed: true });
+    const p = patients.find(x => x.id === patientId);
+    if (p) { p.next_visit_dismissed = 1; p.next_visit_date = null; }
+    renderApp();
+  } catch(e) { alert('Error: ' + e.message); }
+};
+
 window.topbarFilterPatients = function(q) {
   patientSearchQuery = q || '';
   // Re-render solo si estamos en un dashboard con lista
@@ -1008,7 +1019,12 @@ function renderDoctorDashboard() {
               <div style="width:32px;height:32px;border-radius:50%;background:var(--primary-light);display:flex;align-items:center;justify-content:center;font-weight:700;color:var(--primary);">${p.name.charAt(0).toUpperCase()}</div>
               <span style="font-weight:600;">${p.name}</span>
             </div>
-            <span style="font-size:0.85rem;color:${color};font-weight:500;"><i class="fa-solid fa-calendar-check"></i> ${label}</span>
+            <div style="display:flex;align-items:center;gap:0.6rem;">
+              <span style="font-size:0.85rem;color:${color};font-weight:500;"><i class="fa-solid fa-calendar-check"></i> ${label}</span>
+              <button class="nv-dismiss-btn" onclick="event.stopPropagation();dismissNextVisit(${p.id}, '${p.name.replace(/'/g, "\\'")}')" title="Quitar recordatorio de ${p.name}">
+                <i class="fa-solid fa-trash-can"></i>
+              </button>
+            </div>
           </div>`;
         }).join('')}
       </div>

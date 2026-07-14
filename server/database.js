@@ -208,6 +208,9 @@ function runMigrations() {
   // Estado activo/inactivo del paciente
   try { db.prepare('ALTER TABLE patients ADD COLUMN active INTEGER DEFAULT 1').run(); } catch(e) {}
 
+  // Recordatorio de próxima visita descartado (el pediatra lo quita del tablero)
+  try { db.prepare('ALTER TABLE patients ADD COLUMN next_visit_dismissed INTEGER DEFAULT 0').run(); } catch(e) {}
+
   // Niveles de admin: super_admin, admin, asesor (además de pediatra y tutor)
   // SQLite no permite ALTER de un CHECK constraint — recreamos la tabla
   const userCols = db.prepare('PRAGMA table_info(users)').all();

@@ -12,9 +12,11 @@ router.use(requireAuth);
 const WITH_DOCTOR = `
   SELECT p.*, u.name as doctor_name, u.email as doctor_email,
          t.name as tutor_name, t.email as tutor_email,
-         (SELECT next_visit_date FROM consultations
-          WHERE patient_id = p.id AND next_visit_date IS NOT NULL
-          ORDER BY created_at DESC LIMIT 1) AS next_visit_date
+         (CASE WHEN p.next_visit_dismissed = 1 THEN NULL ELSE
+           (SELECT next_visit_date FROM consultations
+            WHERE patient_id = p.id AND next_visit_date IS NOT NULL
+            ORDER BY created_at DESC LIMIT 1)
+         END) AS next_visit_date
   FROM patients p
   LEFT JOIN users u ON u.id = p.doctor_id
   LEFT JOIN users t ON t.id = p.tutor_id
@@ -264,6 +266,20 @@ router.put('/:id/active', requireRole('admin', 'pediatra'), (req, res) => {
   }
   db.prepare('UPDATE patients SET active = ? WHERE id = ?').run(active ? 1 : 0, id);
   res.json({ id, active: active ? 1 : 0 });
+});
+
+// PUT /api/patients/:id/dismiss-next-visit — descarta el recordatorio de próxima
+// visita (pediatra/admin). Reaparece cuando se registra una nueva consulta.
+router.put('/:id/dismiss-next-visit', requireRole('admin', 'pediatra'), (req, res) => {
+  const id = parseInt(req.params.id);
+  const p = db.prepare('SELECT id, doctor_id FROM patients WHERE id = ?').get(id);
+  if (!p) return res.status(404).json({ error: 'Paciente no encontrado' });
+  if (req.user.role === 'pediatra' && p.doctor_id !== req.user.id) {
+    return res.status(403).json({ error: 'No puedes modificar este paciente' });
+  }
+  const dismissed = req.body.dismissed === false ? 0 : 1; // permite reactivar con { dismissed:false }
+  db.prepare('UPDATE patients SET next_visit_dismissed = ? WHERE id = ?').run(dismissed, id);
+  res.json({ id, next_visit_dismissed: dismissed });
 });
 
 // DELETE /api/patients/:id — eliminar paciente (admin)
