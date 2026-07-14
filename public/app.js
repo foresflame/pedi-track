@@ -1346,11 +1346,19 @@ function renderParentProfile() {
       </div>
     </div>` : '';
 
-  // Botón Volver para médico/admin
-  const backView = currentUser.role === 'admin' ? 'admin-dashboard' : 'doctor-dashboard';
+  // Botón Volver — depende del rol y de cómo llegó al expediente
+  let backView, backLabel;
+  if (isAdminLike(currentUser.role)) {
+    // El admin/asesor abre pacientes desde el detalle de un pediatra
+    backView  = viewingPediatraId ? 'admin-pediatra-detail' : 'admin-home';
+    backLabel = viewingPediatraId ? 'Volver al pediatra' : 'Volver';
+  } else {
+    backView  = 'doctor-dashboard';
+    backLabel = 'Volver a Mis Pacientes';
+  }
   const backBtn = currentUser.role !== 'tutor' ? `
     <button class="btn btn-secondary" style="margin-bottom:1rem;" onclick="navigate('${backView}')">
-      <i class="fa-solid fa-arrow-left"></i> Volver a Mis Pacientes
+      <i class="fa-solid fa-arrow-left"></i> ${backLabel}
     </button>` : '';
 
   return `

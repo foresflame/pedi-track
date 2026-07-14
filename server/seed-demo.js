@@ -130,8 +130,9 @@ function seed() {
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`);
   const insConsult = db.prepare(`
     INSERT INTO consultations (patient_id, doctor_id, date, type, weight, height, head_circ, notes,
-                               next_visit_date, heart_rate, resp_rate, temperature, spo2, bp_systolic, bp_diastolic)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+                               next_visit_date, heart_rate, resp_rate, temperature, spo2, bp_systolic, bp_diastolic,
+                               created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
   const insAppt = db.prepare(
     `INSERT INTO appointments (patient_id, doctor_id, date, time, status, notes) VALUES (?, ?, ?, ?, ?, ?)`);
 
@@ -224,7 +225,8 @@ function seed() {
             enfermo ? pick(['Cuadro respiratorio leve, se indica manejo sintomático.','Otitis media, tratamiento antibiótico.','Gastroenteritis, hidratación oral.'])
                     : 'Desarrollo adecuado para la edad. Continúa esquema de vacunación.',
             isLast ? suggestNextVisit(ageMonthsNow, cDate) : suggestNextVisit(m, cDate),
-            v.heart_rate, v.resp_rate, v.temperature, v.spo2, v.bp_systolic, v.bp_diastolic
+            v.heart_rate, v.resp_rate, v.temperature, v.spo2, v.bp_systolic, v.bp_diastolic,
+            iso(cDate) + ' 12:00:00' // created_at real → la última consulta define la próxima visita
           );
           summary.consultas++;
         });
