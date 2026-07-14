@@ -1467,6 +1467,17 @@ header {
         grid-template-columns: 1fr !important;
     }
 
+    /* Horarios de atención: horario + calendario apilados (antes el
+       calendario quedaba aplastado a ~0px de ancho e invisible).
+       minmax(0,1fr) permite que la columna se encoja al ancho de la
+       pantalla en lugar de expandirse al min-content del contenido. */
+    [style*="minmax(0,640px)"] {
+        grid-template-columns: minmax(0, 1fr) !important;
+    }
+    #doctorAgendaWrap { margin-top: 1.25rem; }
+    /* Menos padding en las tarjetas de esta vista para ganar ancho */
+    [style*="padding:1.75rem 2rem"] { padding: 1.1rem 1rem !important; }
+
     /* Evitar texto desbordado */
     .stat-pill,
     .stat-pill > div { min-width: 0; }
@@ -1551,6 +1562,18 @@ header {
     .patients-table td[data-label="Acciones"] { justify-content: space-between; }
     .patients-table td[data-label="Seguimiento"] { gap: 0.6rem; }
     .pt-action { min-width: 40px; min-height: 40px; }
+
+    /* Horarios de atención — campos Inicio/Fin en 2 columnas e Intervalo
+       a lo ancho; minmax(0,1fr) + min-width:0 dejan que los inputs se
+       encojan al ancho de la tarjeta en vez de desbordarla */
+    .availability-times { grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 0.6rem; }
+    .availability-times .avail-field:last-child { grid-column: 1 / -1; }
+    .availability-times .avail-field { min-width: 0; }
+    .availability-times .form-control { width: 100%; min-width: 0; }
+
+    /* El resumen "09:00–17:00 · 8 turnos" salta a su propia línea sin partirse */
+    .avail-day-left { flex-wrap: wrap; }
+    .avail-slots-preview { white-space: nowrap; }
 }
 
 /* Forzar wrap en cualquier texto largo dentro de tarjetas */
