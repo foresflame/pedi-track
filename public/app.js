@@ -444,16 +444,16 @@ function renderAdminPediatraDetail() {
                 const isActive = p.active !== 0;
                 return `
                 <tr class="pt-row ${isActive ? '' : 'is-inactive'}" onclick="viewPatient(${p.id})">
-                  <td>
+                  <td data-label="Paciente" class="pt-cell-primary">
                     <div style="display:flex;align-items:center;gap:0.6rem;">
                       <div class="pt-avatar">${p.name.charAt(0).toUpperCase()}</div>
                       <div><div style="font-weight:600;">${p.name}</div><div style="font-size:0.75rem;color:var(--text-light);">#${String(p.id).padStart(6,'0')}</div></div>
                     </div>
                   </td>
-                  <td style="font-size:0.85rem;">${age}</td>
-                  <td style="font-size:0.82rem;">${p.tutor_name ? `<div style="font-weight:500;">${p.tutor_name}</div><div style="color:var(--text-light);font-size:0.78rem;">${p.tutor_email||'—'}</div>` : '<span style="color:var(--text-light);font-style:italic;">Sin tutor</span>'}</td>
-                  <td style="text-align:center;"><span class="alert-pill" style="background:${isActive ? '#d1fae5' : '#f1f5f9'};color:${isActive ? '#065f46' : '#64748b'};">${isActive ? 'Activo' : 'Inactivo'}</span></td>
-                  <td style="text-align:right;">
+                  <td data-label="Edad" style="font-size:0.85rem;">${age}</td>
+                  <td data-label="Tutor / Correo" style="font-size:0.82rem;">${p.tutor_name ? `<div><div style="font-weight:500;">${p.tutor_name}</div><div style="color:var(--text-light);font-size:0.78rem;">${p.tutor_email||'—'}</div></div>` : '<span style="color:var(--text-light);font-style:italic;">Sin tutor</span>'}</td>
+                  <td data-label="Estado" style="text-align:center;"><span class="alert-pill" style="background:${isActive ? '#d1fae5' : '#f1f5f9'};color:${isActive ? '#065f46' : '#64748b'};">${isActive ? 'Activo' : 'Inactivo'}</span></td>
+                  <td data-label="Acciones" style="text-align:right;">
                     <button class="pt-action" onclick="event.stopPropagation();viewPatient(${p.id})" title="Ver expediente"><i class="fa-solid fa-eye"></i></button>
                     ${!ro && p.tutor_id ? `<button class="pt-action" onclick="event.stopPropagation();openResetPasswordModal(${p.tutor_id}, '${(p.tutor_email||'').replace(/'/g,"\\'")}')" title="Cambiar clave del tutor"><i class="fa-solid fa-key"></i></button>` : ''}
                   </td>
