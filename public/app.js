@@ -396,17 +396,17 @@ function renderAdminPediatraDetail() {
       <button class="btn btn-secondary" style="margin-bottom:1rem;" onclick="navigate('admin-pediatras')"><i class="fa-solid fa-arrow-left"></i> Volver a Pediatras</button>
 
       <div style="background:white;border-radius:16px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.04);border:1px solid #f1f5f9;margin-bottom:1.5rem;">
-        <div style="background:linear-gradient(135deg,var(--primary),var(--secondary));padding:2rem;display:flex;align-items:center;gap:1.5rem;color:white;">
-          <div style="width:100px;height:100px;border-radius:50%;background:white;overflow:hidden;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+        <div class="pediatra-detail-header" style="background:linear-gradient(135deg,var(--primary),var(--secondary));padding:2rem;display:flex;align-items:center;gap:1.5rem;color:white;">
+          <div class="pediatra-detail-avatar" style="width:100px;height:100px;border-radius:50%;background:white;overflow:hidden;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
             ${d.photo ? `<img src="${d.photo}" style="width:100%;height:100%;object-fit:cover;">` : `<i class="fa-solid fa-user-doctor" style="font-size:3rem;color:var(--primary);"></i>`}
           </div>
-          <div style="flex:1;">
-            <h1 style="font-size:1.8rem;margin-bottom:0.3rem;">${d.name}</h1>
+          <div style="flex:1;min-width:0;">
+            <h1 style="font-size:1.8rem;margin-bottom:0.3rem;word-break:break-word;">${d.name}</h1>
             <div style="font-size:1rem;opacity:0.95;">${d.specialty || 'Pediatría general'}</div>
             ${d.license ? `<div style="font-size:0.85rem;opacity:0.85;margin-top:0.2rem;">Cédula: ${d.license}</div>` : ''}
           </div>
           ${!ro ? `
-            <div style="display:flex;flex-direction:column;gap:0.5rem;">
+            <div class="pediatra-detail-actions" style="display:flex;flex-direction:column;gap:0.5rem;">
               <button class="btn" style="background:white;color:var(--primary);" onclick="editUser(${d.id})"><i class="fa-solid fa-pen"></i> Editar</button>
               <button class="btn" style="background:rgba(255,255,255,0.2);color:white;border:1px solid rgba(255,255,255,0.5);" onclick="openResetPasswordForUser(${d.id}, '${d.name.replace(/'/g, "\\'")}', '${(d.email||'').replace(/'/g,"\\'")}')"><i class="fa-solid fa-key"></i> Cambiar clave</button>
             </div>

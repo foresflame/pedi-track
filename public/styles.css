@@ -1626,6 +1626,25 @@ header {
     /* El resumen "09:00–17:00 · 8 turnos" salta a su propia línea sin partirse */
     .avail-day-left { flex-wrap: wrap; }
     .avail-slots-preview { white-space: nowrap; }
+
+    /* Detalle del pediatra (admin): apilar avatar, datos y botones */
+    .pediatra-detail-header {
+        flex-direction: column !important;
+        align-items: center !important;
+        text-align: center;
+        padding: 1.5rem 1.25rem !important;
+        gap: 1rem !important;
+    }
+    .pediatra-detail-header > div[style*="flex:1"] { text-align: center; }
+    .pediatra-detail-header h1 { font-size: 1.4rem !important; }
+    .pediatra-detail-avatar { width: 84px !important; height: 84px !important; }
+    .pediatra-detail-actions {
+        flex-direction: row !important;
+        flex-wrap: wrap;
+        justify-content: center;
+        width: 100%;
+    }
+    .pediatra-detail-actions .btn { flex: 1 1 auto; justify-content: center; white-space: nowrap; }
 }
 
 /* Forzar wrap en cualquier texto largo dentro de tarjetas */

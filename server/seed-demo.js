@@ -281,4 +281,10 @@ console.log('\n🔑 Acceso (todos con la misma contraseña):');
 console.log(`   Contraseña: ${DEMO_PASSWORD}`);
 PEDIATRAS.forEach(p => console.log(`   • ${p.email}`));
 console.log('\n   (Los tutores usan emails tutor.<nombre>...@demo.pt con la misma contraseña.)\n');
+
+// Forzar checkpoint del WAL para que los cambios queden en el archivo principal.
+// En Google Drive el WAL entre procesos no siempre se sincroniza, y sin esto el
+// proceso del server no ve los usuarios recién creados (login demo daría 401).
+try { db.pragma('wal_checkpoint(TRUNCATE)'); } catch (e) {}
+
 process.exit(0);
