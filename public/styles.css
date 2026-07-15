@@ -1,7 +1,14 @@
 :root {
-    --primary: #4A90E2;
-    --primary-light: #E1EEFA;
-    --secondary: #50E3C2;
+    /* Paleta Genali
+       --primary/--secondary son versiones legibles (texto + fondos con texto
+       blanco). Los tonos pastel exactos del logo viven en *-soft. */
+    --primary: #348C62;          /* verde legible (texto, botones, links) */
+    --primary-soft: #96CDA5;     /* verde menta de marca (acentos suaves) */
+    --primary-light: #E9F5EE;    /* verde muy claro (fondos, chips) */
+    --secondary: #6F7FC9;        /* lavanda legible (iconos, acentos) */
+    --secondary-soft: #A1AEDB;   /* lavanda de marca */
+    --accent-peach: #F9C78A;     /* durazno */
+    --accent-pink: #F186A4;      /* rosa */
     --text-dark: #2C3E50;
     --text-light: #7F8C8D;
     --bg-color: #F8FAFC;
@@ -79,13 +86,13 @@ header {
 .btn-primary {
     background-color: var(--primary);
     color: var(--white);
-    box-shadow: 0 4px 15px rgba(74, 144, 226, 0.3);
+    box-shadow: 0 4px 15px rgba(55, 144, 104, 0.3);
 }
 
 .btn-primary:hover {
-    background-color: #357ABD;
+    background-color: #2c7955;
     transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(74, 144, 226, 0.4);
+    box-shadow: 0 6px 20px rgba(55, 144, 104, 0.4);
 }
 
 .btn-secondary {
@@ -94,7 +101,7 @@ header {
 }
 
 .btn-secondary:hover {
-    background-color: #d1e5f7;
+    background-color: #d6efe1;
     transform: translateY(-2px);
 }
 
@@ -131,7 +138,7 @@ header {
 .role-card:hover {
     transform: translateY(-10px);
     border-color: var(--primary-light);
-    box-shadow: 0 15px 35px rgba(74, 144, 226, 0.1);
+    box-shadow: 0 15px 35px rgba(55, 144, 104, 0.1);
 }
 
 .role-icon {
@@ -207,7 +214,7 @@ header {
     align-items: center;
     gap: 2rem;
     margin-bottom: 3rem;
-    box-shadow: 0 15px 30px rgba(74, 144, 226, 0.2);
+    box-shadow: 0 15px 30px rgba(55, 144, 104, 0.2);
     position: relative;
     overflow: hidden;
     flex-wrap: wrap;
@@ -509,7 +516,7 @@ header {
     background-color: var(--primary);
     color: white;
     border-color: var(--primary);
-    box-shadow: 0 4px 10px rgba(74, 144, 226, 0.3);
+    box-shadow: 0 4px 10px rgba(55, 144, 104, 0.3);
 }
 
 .expediente-grid {
@@ -862,7 +869,7 @@ header {
 .sidebar-link.is-active {
     background: linear-gradient(135deg, var(--primary), var(--secondary));
     color: white;
-    box-shadow: 0 4px 12px rgba(74,144,226,0.3);
+    box-shadow: 0 4px 12px rgba(55,144,104,0.3);
 }
 .sidebar-link i { width: 18px; text-align: center; font-size: 0.95rem; }
 
@@ -950,7 +957,7 @@ header {
     outline: none;
     border-color: var(--primary);
     background: white;
-    box-shadow: 0 0 0 3px rgba(74,144,226,0.1);
+    box-shadow: 0 0 0 3px rgba(55,144,104,0.1);
 }
 .topbar-actions {
     display: flex;
@@ -981,7 +988,7 @@ header {
     align-items: center;
     gap: 0.45rem;
     padding: 0.55rem 1.1rem;
-    background: linear-gradient(135deg, var(--primary), #2563eb);
+    background: linear-gradient(135deg, var(--primary), var(--secondary));
     color: white;
     border: none;
     border-radius: 10px;
@@ -989,11 +996,11 @@ header {
     font-weight: 600;
     cursor: pointer;
     transition: all 0.15s;
-    box-shadow: 0 2px 8px rgba(74,144,226,0.25);
+    box-shadow: 0 2px 8px rgba(55,144,104,0.25);
 }
 .topbar-primary:hover {
     transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(74,144,226,0.35);
+    box-shadow: 0 4px 12px rgba(55,144,104,0.35);
 }
 
 .app-content {
@@ -1004,7 +1011,7 @@ header {
 
 /* Hero banner */
 .hero-banner {
-    background: linear-gradient(135deg, #dbeafe 0%, #e0e7ff 100%);
+    background: linear-gradient(135deg, #e7e9f7 0%, #e0e7ff 100%);
     border-radius: 16px;
     padding: 1.75rem 2rem;
     margin-bottom: 1.5rem;
@@ -1016,7 +1023,7 @@ header {
 }
 .hero-illustration {
     font-size: 4rem;
-    color: rgba(74,144,226,0.25);
+    color: rgba(55,144,104,0.25);
 }
 
 /* Stats row */
@@ -1130,7 +1137,7 @@ header {
 .pt-avatar {
     width: 38px; height: 38px;
     border-radius: 50%;
-    background: linear-gradient(135deg, var(--primary-light), #dbeafe);
+    background: linear-gradient(135deg, var(--primary-light), #e7e9f7);
     color: var(--primary);
     font-weight: 700;
     display: flex; align-items: center; justify-content: center;
@@ -1174,7 +1181,7 @@ header {
     font-weight: 700;
     font-size: 0.92rem;
     color: var(--primary);
-    background: #dbeafe;
+    background: #e7e9f7;
     padding: 0.35rem 0.6rem;
     border-radius: 8px;
     min-width: 58px;
@@ -1184,7 +1191,7 @@ header {
 .home-appt-avatar {
     width: 36px; height: 36px;
     border-radius: 50%;
-    background: linear-gradient(135deg, var(--primary-light), #dbeafe);
+    background: linear-gradient(135deg, var(--primary-light), #e7e9f7);
     color: var(--primary);
     font-weight: 700;
     display: flex; align-items: center; justify-content: center;

@@ -1456,7 +1456,7 @@ function renderParentProfile() {
           <span style="display:flex;align-items:center;gap:0.35rem;"><span style="width:28px;height:8px;background:rgba(74,222,128,0.35);border-radius:3px;display:inline-block;"></span> P3–P97</span>
           <span style="display:flex;align-items:center;gap:0.35rem;"><span style="width:28px;height:8px;background:rgba(34,197,94,0.45);border-radius:3px;display:inline-block;"></span> P15–P85</span>
           <span style="display:flex;align-items:center;gap:0.35rem;"><span style="width:28px;height:3px;background:#16a34a;border-radius:3px;display:inline-block;border-top:2px dashed #16a34a;"></span> P50 (mediana)</span>
-          <span style="display:flex;align-items:center;gap:0.35rem;"><span style="width:10px;height:10px;background:#4A90E2;border-radius:50%;display:inline-block;"></span> Paciente</span>
+          <span style="display:flex;align-items:center;gap:0.35rem;"><span style="width:10px;height:10px;background:#6F7FC9;border-radius:50%;display:inline-block;"></span> Paciente</span>
         </div>
       </div>
 
@@ -3811,8 +3811,8 @@ function initChart() {
         { label:'P3',  data:r3,  borderColor:'rgba(74,222,128,0.3)', borderWidth:1, pointRadius:0, fill:'-3', backgroundColor:'rgba(74,222,128,0.15)', tension:0.4 },
         // Datos del paciente
         {
-          label, data: patientData, borderColor:'#4A90E2', backgroundColor:'#fff',
-          borderWidth:2.5, pointBackgroundColor:'#4A90E2', pointBorderColor:'#fff',
+          label, data: patientData, borderColor:'#6F7FC9', backgroundColor:'#fff',
+          borderWidth:2.5, pointBackgroundColor:'#6F7FC9', pointBorderColor:'#fff',
           pointBorderWidth:2, pointRadius:5, fill:false, tension:0.4,
           parsing: false
         }
@@ -4186,7 +4186,7 @@ window.printPrescription = function(idx) {
   const ageStr     = calculateAgeString(birthDate);
   const doctorName = p.doctor_name || (currentUser.role === 'pediatra' ? currentUser.name : 'Médico Tratante');
   const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>Receta - ${p.name}</title>
-    <style>body{font-family:Arial,sans-serif;padding:40px;color:#1e293b;max-width:800px;margin:0 auto;}.header{text-align:center;border-bottom:2px solid #4A90E2;padding-bottom:20px;margin-bottom:30px;}.header h1{color:#4A90E2;font-size:28px;margin:0;}.patient-info{display:grid;grid-template-columns:1fr 1fr;gap:15px;margin-bottom:40px;font-size:14px;}.patient-info div{background:#f8fafc;padding:12px 15px;border-radius:6px;border:1px solid #e2e8f0;}.rx{font-size:40px;color:#4A90E2;font-weight:bold;font-style:italic;font-family:serif;margin-bottom:20px;}.med-list{list-style:none;padding:0;margin-left:20px;}.med-list li{margin-bottom:25px;border-bottom:1px dashed #cbd5e1;padding-bottom:15px;}.med-name{font-weight:bold;font-size:18px;margin-bottom:8px;}.med-details{font-size:15px;color:#475569;}.footer{margin-top:80px;text-align:center;}.signature{margin:60px auto 0;border-top:1px solid #94a3b8;width:250px;padding-top:10px;color:#475569;text-align:center;}</style>
+    <style>body{font-family:Arial,sans-serif;padding:40px;color:#1e293b;max-width:800px;margin:0 auto;}.header{text-align:center;border-bottom:2px solid #6F7FC9;padding-bottom:20px;margin-bottom:30px;}.header h1{color:#6F7FC9;font-size:28px;margin:0;}.patient-info{display:grid;grid-template-columns:1fr 1fr;gap:15px;margin-bottom:40px;font-size:14px;}.patient-info div{background:#f8fafc;padding:12px 15px;border-radius:6px;border:1px solid #e2e8f0;}.rx{font-size:40px;color:#6F7FC9;font-weight:bold;font-style:italic;font-family:serif;margin-bottom:20px;}.med-list{list-style:none;padding:0;margin-left:20px;}.med-list li{margin-bottom:25px;border-bottom:1px dashed #cbd5e1;padding-bottom:15px;}.med-name{font-weight:bold;font-size:18px;margin-bottom:8px;}.med-details{font-size:15px;color:#475569;}.footer{margin-top:80px;text-align:center;}.signature{margin:60px auto 0;border-top:1px solid #94a3b8;width:250px;padding-top:10px;color:#475569;text-align:center;}</style>
   </head><body>
     <div class="header"><h1>${doctorName}</h1><p style="color:#64748b;font-size:14px;margin:5px 0 0;">Especialista en Pediatría</p></div>
     <div class="patient-info">
