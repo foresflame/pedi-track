@@ -146,7 +146,7 @@ function renderApp() {
     html = `
       <header>
         <div class="logo cursor-pointer" onclick="${currentUser ? "navigate(getRoleDefaultView(currentUser.role))" : "navigate('login')"}">
-          <i class="fa-solid fa-baby-carriage"></i> PediTrack
+          <img src="/img/genali-icon.svg" alt="" style="height:34px;width:34px;"> Genali
         </div>
         ${headerAction}
       </header>
@@ -168,9 +168,8 @@ function renderLogin() {
   return `
     <div style="max-width:400px;margin:4rem auto;background:white;padding:2.5rem;border-radius:15px;box-shadow:var(--card-shadow);">
       <div style="text-align:center;margin-bottom:2rem;">
-        <i class="fa-solid fa-baby-carriage" style="font-size:3.5rem;color:var(--primary);"></i>
-        <h1 style="margin-top:1rem;font-size:2rem;">PediTrack</h1>
-        <p style="color:var(--text-light);margin-top:0.5rem;">Iniciar sesión en tu cuenta</p>
+        <img src="/img/genali-logo.svg" alt="Genali" style="width:210px;max-width:75%;display:block;margin:0 auto;">
+        <p style="color:var(--text-light);margin-top:0.75rem;">Iniciar sesión en tu cuenta</p>
       </div>
       <div id="loginError" style="display:none;background:#fee2e2;color:#dc2626;padding:0.75rem 1rem;border-radius:8px;margin-bottom:1rem;font-size:0.9rem;"></div>
       <div class="form-group">
@@ -757,9 +756,9 @@ function renderSidebar() {
   return `
     <aside class="sidebar">
       <div class="sidebar-brand">
-        <div class="sidebar-brand-icon"><i class="fa-solid fa-baby-carriage"></i></div>
+        <div class="sidebar-brand-icon"><img src="/img/genali-icon.svg" alt="Genali"></div>
         <div>
-          <div class="sidebar-brand-title">PediTrack</div>
+          <div class="sidebar-brand-title">Genali</div>
           <div class="sidebar-brand-subtitle">Historia clínica visual</div>
         </div>
       </div>
@@ -796,8 +795,8 @@ function renderTopbar() {
         <i class="fa-solid fa-bars"></i>
       </button>
       <div class="topbar-mobile-brand">
-        <i class="fa-solid fa-baby-carriage" style="color:var(--primary);"></i>
-        <strong>PediTrack</strong>
+        <img src="/img/genali-icon.svg" alt="" style="height:26px;width:26px;">
+        <strong>Genali</strong>
       </div>
       <div class="topbar-search">
         <i class="fa-solid fa-magnifying-glass"></i>
