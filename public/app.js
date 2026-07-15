@@ -146,7 +146,7 @@ function renderApp() {
     html = `
       <header>
         <div class="logo cursor-pointer" onclick="${currentUser ? "navigate(getRoleDefaultView(currentUser.role))" : "navigate('login')"}">
-          <img src="/img/genali-icon.svg" alt="" style="height:34px;width:34px;"> Genali
+          <img src="/img/genali-icon.svg" alt="" style="height:34px;width:34px;"> genali.mx
         </div>
         ${headerAction}
       </header>
@@ -758,7 +758,7 @@ function renderSidebar() {
       <div class="sidebar-brand">
         <div class="sidebar-brand-icon"><img src="/img/genali-icon.svg" alt="Genali"></div>
         <div>
-          <div class="sidebar-brand-title">Genali</div>
+          <div class="sidebar-brand-title">genali.mx</div>
           <div class="sidebar-brand-subtitle">Historia clínica visual</div>
         </div>
       </div>
@@ -796,7 +796,7 @@ function renderTopbar() {
       </button>
       <div class="topbar-mobile-brand">
         <img src="/img/genali-icon.svg" alt="" style="height:26px;width:26px;">
-        <strong>Genali</strong>
+        <strong>genali.mx</strong>
       </div>
       <div class="topbar-search">
         <i class="fa-solid fa-magnifying-glass"></i>
