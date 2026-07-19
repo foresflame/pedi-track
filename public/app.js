@@ -140,16 +140,17 @@ function renderApp() {
       </div>
     ` + renderModals();
   } else {
-    const headerAction = currentUser
-      ? `<button class="btn btn-secondary" onclick="handleLogout()"><i class="fa-solid fa-arrow-right-from-bracket"></i> Salir</button>`
-      : '';
-    html = `
+    // Sin sesión (pantalla de login) no hay header: el único logo es el del card de login.
+    const headerHtml = currentUser
+      ? `
       <header>
-        <div class="logo cursor-pointer" onclick="${currentUser ? "navigate(getRoleDefaultView(currentUser.role))" : "navigate('login')"}">
+        <div class="logo cursor-pointer" onclick="navigate(getRoleDefaultView(currentUser.role))">
           <img src="/img/genali-icon.svg" alt="" style="height:34px;width:34px;"> genali.mx
         </div>
-        ${headerAction}
-      </header>
+        <button class="btn btn-secondary" onclick="handleLogout()"><i class="fa-solid fa-arrow-right-from-bracket"></i> Salir</button>
+      </header>`
+      : '';
+    html = headerHtml + `
       <main class="container animate-fade-in" id="main-content">${viewHtml}</main>
     ` + renderModals();
   }
